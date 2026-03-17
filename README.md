@@ -110,21 +110,11 @@ bash scripts/setup.sh
 # 2. Grant accessibility permissions
 # System Settings → Privacy & Security → Accessibility → Add Terminal / OpenClaw
 
-# 3. Run
-source ~/gui-agent-env/bin/activate
-python3 scripts/agent.py learn --app WeChat          # Learn any app
-python3 scripts/agent.py click --app WeChat --component search_bar_icon  # Click by name
-python3 scripts/agent.py explore --app WeChat         # Vision analysis
+# 3. Use with OpenClaw (recommended) or any LLM agent
+# Add to ~/.openclaw/openclaw.json:
+#   "skills": { "entries": { "gui-agent": { "enabled": true } } }
+# Then just chat: "帮我在微信里给小明发消息"
 ```
-
-## 🦞 Use with OpenClaw (Recommended)
-
-If you already use [OpenClaw](https://github.com/openclaw/openclaw) as your AI assistant:
-
-1️⃣ Clone into skills directory: `cd ~/.openclaw/workspace/skills && git clone https://github.com/Fzkuji/GUIClaw.git gui-agent && bash gui-agent/scripts/setup.sh`
-2️⃣ Enable in config: `"skills": { "entries": { "gui-agent": { "enabled": true } } }`
-3️⃣ Say: "帮我在微信里给小明发消息"
-4️⃣ Done — OpenClaw reads `SKILL.md`, learns the app, and operates it automatically. You just chat.
 
 ## 🧠 How It Works
 
