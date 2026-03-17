@@ -33,7 +33,7 @@
 
 ## 💬 What It Looks Like
 
-> **You**: "帮我在微信里给小明发消息，就说明天见"
+> **You**: "Send a message to John in WeChat saying see you tomorrow"
 
 ```
 OBSERVE  → Screenshot, identify current state
@@ -44,23 +44,23 @@ REVISE   → Check memory for WeChat
            ├── Learned before? Yes (24 components)
            └── Workflow "send_message" known? Yes → use existing memory
 
-NAVIGATE → Find contact "小明"
+NAVIGATE → Find contact "John"
            ├── Template match sidebar → not visible
            ├── Template match search_bar_icon → found (conf=0.96) → click
-           ├── Paste "小明" into search field (clipboard → Cmd+V)
+           ├── Paste "John" into search field (clipboard → Cmd+V)
            └── OCR search results → found → click
 
 VERIFY   → Confirm correct chat opened
-           ├── OCR chat header → "小明" ✅
-           └── Wrong contact? → ABORT (never happened here)
+           ├── OCR chat header → "John" ✅
+           └── Wrong contact? → ABORT
 
 ACT      → Send message
            ├── Click input field (template match)
-           ├── Paste "明天见" (clipboard → Cmd+V)
+           ├── Paste "see you tomorrow" (clipboard → Cmd+V)
            └── Press Enter
 
 CONFIRM  → Verify message sent
-           ├── OCR chat area → "明天见" visible ✅
+           ├── OCR chat area → "see you tomorrow" visible ✅
            └── Done
 ```
 
@@ -70,31 +70,77 @@ CONFIRM  → Verify message sent
 ### "Scan my Mac for malware"
 
 ```
-OBSERVE  → CleanMyMac X not in foreground → activate
-REVISE   → "malware_removal" workflow known? Yes
-NAVIGATE → Click "Malware Removal" in sidebar → verify page switched
-ACT      → Click "Scan" button (exact match, bottom position)
-POLL     → Every 2s: screenshot → check for "No threats"
+OBSERVE  → Screenshot → CleanMyMac X not in foreground → activate
+           ├── Get main window bounds (largest window, skip status bar panels)
+           └── OCR window content → identify current page state
+
+REVISE   → Check memory for CleanMyMac X
+           ├── "malware_removal" workflow known? Yes
+           └── Use existing memory, skip full re-learn
+
+NAVIGATE → Click "Malware Removal" in sidebar
+           ├── Find element in window (exact match, filter by window bounds)
+           └── Verify page switched (OCR confirms new page content)
+
+ACT      → Click "Scan" button
+           ├── Find "Scan" (exact match, bottom position — prevents matching "Deep Scan")
+           └── Click → scan starts
+
+POLL     → Wait for completion (event-driven, no fixed sleep)
+           ├── Every 2s: screenshot → OCR check for "No threats"
+           └── Target found → proceed immediately
+
 CONFIRM  → "No threats found" ✅
 ```
 
 ### "Check if my GPU training is still running"
 
 ```
-OBSERVE  → Chrome open, find JupyterLab tab → click
-EXPLORE  → Multiple terminal tabs → find nvitop tab → click
-READ     → Screenshot terminal → GPU 1-7 at 100%, experiment running ✅
+OBSERVE  → Screenshot → Chrome is open
+           └── Identify target: JupyterLab tab
+
+NAVIGATE → Find JupyterLab tab in browser
+           ├── OCR tab bar or use bookmarks
+           └── Click to switch
+
+EXPLORE  → Multiple terminal tabs visible
+           ├── Screenshot terminal area
+           ├── LLM vision analysis → identify which tab has nvitop
+           └── Click the correct tab
+
+READ     → Screenshot terminal content
+           ├── LLM reads GPU utilization table
+           └── Report: "8 GPUs, 7 at 100% — experiment running" ✅
 ```
 
-### "通过活动监视器关掉 GlobalProtect"
+### "Kill GlobalProtect via Activity Monitor"
 
 ```
-OBSERVE  → Launch Activity Monitor, identify current tab
-EXPLORE  → Network tab active, need search field
-ACT      → Click search field → paste "GlobalProtect" (clipboard, never type)
+OBSERVE  → Screenshot current state
+           └── Neither GlobalProtect nor Activity Monitor in foreground
+
+ACT      → Launch both apps
+           ├── open -a "GlobalProtect"
+           └── open -a "Activity Monitor"
+
+EXPLORE  → Screenshot Activity Monitor window
+           ├── LLM vision → "Network tab active, search field empty at top-right"
+           └── Decide: click search field first
+
+ACT      → Search for process
+           ├── Click search field (identified by explore)
+           ├── Paste "GlobalProtect" (clipboard → Cmd+V, never cliclick type)
+           └── Wait for filter results
+
 VERIFY   → Process found in list → select it
-ACT      → Click stop button (X) → confirmation dialog
-VERIFY   → Click "Force Quit" → process list empty ✅
+
+ACT      → Kill process
+           ├── Click stop button (X) in toolbar
+           └── Confirmation dialog appears
+
+VERIFY   → Click "Force Quit"
+
+CONFIRM  → Screenshot → process list empty → terminated ✅
 ```
 
 </details>
@@ -113,7 +159,7 @@ bash scripts/setup.sh
 # 3. Use with OpenClaw (recommended) or any LLM agent
 # Add to ~/.openclaw/openclaw.json:
 #   "skills": { "entries": { "gui-agent": { "enabled": true } } }
-# Then just chat: "帮我在微信里给小明发消息"
+# Then just chat: "Send a message to John in WeChat"
 ```
 
 ## 🧠 How It Works
