@@ -1,6 +1,6 @@
 ---
 name: gui-agent
-description: "Control desktop GUI applications on macOS using visual detection, template matching, and cliclick. Use when asked to operate, click, type, or interact with any desktop application. Triggers on: '打开微信', 'click the button', '帮我清理电脑', 'send a message in WeChat', '操作桌面应用', 'learn this app', GUI操作, desktop automation. NOT for web-only tasks (use browser tool) or simple file operations."
+description: "Operate any macOS desktop application — open apps, click buttons, type text, send messages, fill forms, navigate menus. Use when the task requires interacting with a GUI window on screen. NOT for web-only tasks (use browser tool) or simple file operations."
 ---
 
 # GUI Agent Skill
