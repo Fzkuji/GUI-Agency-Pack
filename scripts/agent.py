@@ -280,11 +280,17 @@ if (best) best.join(","); else "";
 # These functions enforce the Operation Protocol
 # ═══════════════════════════════════════════
 
-def observe_state(app_name):
+def observe_state(app_name, include_yolo=False):
     """STEP 0: Observe current state before any action.
 
     MANDATORY. Never skip this.
-    Returns: {frontmost, target_visible, window, page_state, elements}
+
+    Args:
+        app_name: target app
+        include_yolo: if True, also run YOLO icon detection (slower but finds buttons)
+                     Default False for speed. Set True when OCR can't find target.
+
+    Returns: {frontmost, window, visible_text, all_elements, icon_count, ...}
     """
     state = {}
 
@@ -335,26 +341,28 @@ def observe_state(app_name):
                 "type": "text",
             })
 
-        # YOLO: icon/button elements
-        try:
-            icon_elements, img_w, img_h = ui_detector.detect_icons(
-                "/tmp/_observe.png", conf=0.2, iou=0.3)
-            scale = get_retina_scale() if 'get_retina_scale' in dir() else (2 if img_w > 2000 else 1)
-            for el in icon_elements:
-                all_text.append({
-                    "text": "",  # icons have no text
-                    "cx": el.get("cx", 0) // scale,
-                    "cy": el.get("cy", 0) // scale,
-                    "x": el.get("x", 0) // scale,
-                    "y": el.get("y", 0) // scale,
-                    "w": el.get("w", 0) // scale,
-                    "h": el.get("h", 0) // scale,
-                    "type": "icon",
-                    "confidence": el.get("confidence", 0),
-                })
-            state["icon_count"] = len(icon_elements)
-        except:
-            state["icon_count"] = 0
+        # YOLO: icon/button elements (only if requested)
+        state["icon_count"] = 0
+        if include_yolo:
+            try:
+                icon_elements, img_w, img_h = ui_detector.detect_icons(
+                    "/tmp/_observe.png", conf=0.2, iou=0.3)
+                scale = RETINA_SCALE
+                for el in icon_elements:
+                    all_text.append({
+                        "text": "",
+                        "cx": el.get("cx", 0) // scale,
+                        "cy": el.get("cy", 0) // scale,
+                        "x": el.get("x", 0) // scale,
+                        "y": el.get("y", 0) // scale,
+                        "w": el.get("w", 0) // scale,
+                        "h": el.get("h", 0) // scale,
+                        "type": "icon",
+                        "confidence": el.get("confidence", 0),
+                    })
+                state["icon_count"] = len(icon_elements)
+            except:
+                pass
 
         # Filter to target window area
         if bounds:
@@ -388,6 +396,90 @@ def observe_state(app_name):
             pass
 
     return state
+
+
+# ═══════════════════════════════════════════
+# Workflow Recording — save steps for reuse
+# ═══════════════════════════════════════════
+
+def save_workflow(app_name, workflow_name, steps, notes=None):
+    """Save a workflow's steps to app memory for future reference.
+
+    Each workflow records:
+    - steps: list of {action, target, result, timestamp}
+    - notes: lessons learned (OCR quirks, timing, etc.)
+    """
+    app_dir = MEMORY_DIR / app_name.lower().replace(" ", "_")
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    workflows_dir = app_dir / "workflows"
+    workflows_dir.mkdir(exist_ok=True)
+
+    workflow = {
+        "app": app_name,
+        "workflow": workflow_name,
+        "steps": steps,
+        "notes": notes or [],
+        "last_run": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    path = workflows_dir / f"{workflow_name}.json"
+    with open(path, "w") as f:
+        json.dump(workflow, f, indent=2, ensure_ascii=False)
+
+    # Update app summary
+    update_app_summary(app_name)
+
+
+def load_workflow(app_name, workflow_name):
+    """Load a saved workflow. Returns None if not found."""
+    app_dir = MEMORY_DIR / app_name.lower().replace(" ", "_")
+    path = app_dir / "workflows" / f"{workflow_name}.json"
+    if path.exists():
+        with open(path) as f:
+            return json.load(f)
+    return None
+
+
+def update_app_summary(app_name):
+    """Update the app-level summary — overview of all known workflows and components.
+
+    This summary acts as a skill reference: any agent reading it knows
+    what the app can do and how to operate it.
+    """
+    app_dir = MEMORY_DIR / app_name.lower().replace(" ", "_")
+    app_dir.mkdir(parents=True, exist_ok=True)
+
+    summary = {
+        "app": app_name,
+        "updated": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "workflows": {},
+        "component_count": 0,
+        "pages": [],
+    }
+
+    # Load profile for components/pages
+    profile_path = app_dir / "profile.json"
+    if profile_path.exists():
+        with open(profile_path) as f:
+            profile = json.load(f)
+        summary["component_count"] = len(profile.get("components", {}))
+        summary["pages"] = list(profile.get("pages", {}).keys())
+
+    # Load all workflows
+    workflows_dir = app_dir / "workflows"
+    if workflows_dir.exists():
+        for wf_file in workflows_dir.glob("*.json"):
+            with open(wf_file) as f:
+                wf = json.load(f)
+            summary["workflows"][wf_file.stem] = {
+                "steps_count": len(wf.get("steps", [])),
+                "notes": wf.get("notes", []),
+                "last_run": wf.get("last_run"),
+            }
+
+    with open(app_dir / "summary.json", "w") as f:
+        json.dump(summary, f, indent=2, ensure_ascii=False)
 
 
 def explore(app_name, question=None):
@@ -785,6 +877,24 @@ ACTIONS = {
         "fn": action_list_components,
         "args": ["app"],
         "desc": "List known components",
+    },
+    "workflows": {
+        "fn": lambda app_name, **kw: print(json.dumps(
+            load_workflow(app_name, kw.get("workflow", "")) or
+            {"workflows": list((MEMORY_DIR / app_name.lower().replace(" ", "_") / "workflows").glob("*.json"))
+             if (MEMORY_DIR / app_name.lower().replace(" ", "_") / "workflows").exists() else []},
+            indent=2, ensure_ascii=False, default=str)),
+        "args": ["app"],
+        "optional": ["workflow"],
+        "desc": "List or view saved workflows for an app",
+    },
+    "summary": {
+        "fn": lambda app_name: print(json.dumps(
+            json.load(open(MEMORY_DIR / app_name.lower().replace(" ", "_") / "summary.json"))
+            if (MEMORY_DIR / app_name.lower().replace(" ", "_") / "summary.json").exists()
+            else {"error": "No summary found"}, indent=2, ensure_ascii=False)),
+        "args": ["app"],
+        "desc": "Show app summary (all workflows + components overview)",
     },
     "explore": {
         "fn": lambda app_name, **kw: explore(app_name, kw.get("question")),
