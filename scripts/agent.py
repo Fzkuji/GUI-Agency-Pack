@@ -19,6 +19,7 @@ It bridges SKILL.md rules and the underlying scripts (app_memory, ui_detector, g
 import argparse
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -1138,6 +1139,64 @@ def action_list_components(app_name):
     return out
 
 
+def action_key_press(key, app_name=None):
+    """Press a key or key combo. Single keys via cliclick, combos via osascript."""
+    if app_name:
+        activate_app(resolve_app_name(app_name))
+        time.sleep(0.3)
+
+    # Check if it's a combo (e.g., "command-v", "command-shift-s")
+    if "-" in key and any(mod in key.lower() for mod in ["command", "shift", "option", "control"]):
+        parts = key.lower().split("-")
+        char = parts[-1]
+        modifiers = parts[:-1]
+        mod_map = {
+            "command": "command down",
+            "shift": "shift down",
+            "option": "option down",
+            "control": "control down",
+        }
+        using = ", ".join(mod_map[m] for m in modifiers if m in mod_map)
+        # Handle special keys
+        special = {"return": 36, "enter": 36, "tab": 48, "esc": 53, "escape": 53,
+                   "delete": 51, "space": 49, "up": 126, "down": 125, "left": 123, "right": 124}
+        if char in special:
+            script = f'tell application "System Events" to key code {special[char]} using {{{using}}}'
+        else:
+            script = f'tell application "System Events" to keystroke "{char}" using {{{using}}}'
+        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5)
+    else:
+        # Single key via cliclick
+        key_map = {"enter": "return", "escape": "esc"}
+        cliclick_key = key_map.get(key.lower(), key.lower())
+        subprocess.run(["/opt/homebrew/bin/cliclick", f"kp:{cliclick_key}"], capture_output=True, timeout=5)
+
+    print(f"  ⌨️ Pressed {key}")
+    return True
+
+
+def action_type_text(text, app_name=None):
+    """Type or paste text. Uses pbcopy+Cmd+V for non-ASCII, cliclick for ASCII."""
+    if app_name:
+        activate_app(resolve_app_name(app_name))
+        time.sleep(0.3)
+
+    # Check if text is pure ASCII
+    if all(ord(c) < 128 for c in text):
+        subprocess.run(["/opt/homebrew/bin/cliclick", f"t:{text}"], capture_output=True, timeout=5)
+    else:
+        # Non-ASCII: paste via clipboard
+        subprocess.run(["bash", "-c", f'echo -n {shlex.quote(text)} | LANG=en_US.UTF-8 pbcopy'],
+            capture_output=True, timeout=5)
+        time.sleep(0.1)
+        subprocess.run(["osascript", "-e",
+            'tell application "System Events" to keystroke "v" using command down'],
+            capture_output=True, timeout=5)
+
+    print(f"  ⌨️ Typed: {text[:50]}{'...' if len(text) > 50 else ''}")
+    return True
+
+
 def action_screenshot_and_read(app_name=None):
     """Take screenshot and OCR the current screen/window."""
     if app_name:
@@ -1186,6 +1245,18 @@ ACTIONS = {
         "fn": action_navigate_browser,
         "args": ["url"],
         "desc": "Navigate browser to URL",
+    },
+    "key": {
+        "fn": action_key_press,
+        "args": ["key"],
+        "optional": ["app"],
+        "desc": "Press a key or combo (e.g., return, esc, command-v, command-shift-s)",
+    },
+    "type": {
+        "fn": action_type_text,
+        "args": ["text"],
+        "optional": ["app"],
+        "desc": "Type or paste text (auto-detects ASCII vs CJK)",
     },
     "learn": {
         "fn": action_learn_app,
@@ -1294,6 +1365,8 @@ def main():
     parser.add_argument("--message", help="Message text")
     parser.add_argument("--component", help="Component name to click")
     parser.add_argument("--url", help="URL to navigate to")
+    parser.add_argument("--key", help="Key or combo to press (e.g., return, command-v)")
+    parser.add_argument("--text", help="Text to type or paste")
     parser.add_argument("--workflow", help="Workflow/page name (for revise logic)")
     parser.add_argument("--list-actions", action="store_true", help="List available actions")
     args = parser.parse_args()
@@ -1333,6 +1406,10 @@ def main():
             kwargs["component"] = args.component
         if args.url:
             kwargs["url"] = args.url
+        if args.key:
+            kwargs["key"] = args.key
+        if args.text:
+            kwargs["text"] = args.text
         if args.workflow:
             kwargs["workflow"] = args.workflow
 
