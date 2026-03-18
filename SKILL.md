@@ -687,20 +687,23 @@ gui-agent/
 ├── SKILL.md              # This file
 ├── actions/              # Atomic operations
 │   └── _actions.yaml
-├── scenes/               # Per-app operation workflows
-│   ├── wechat/
-│   ├── discord.yaml
-│   └── ...
-├── memory/               # Visual memory (gitignored)
+├── memory/               # All visual memory (gitignored)
 │   └── apps/
-│       ├── wechat/       # profile.json + components/ + pages/
-│       └── ...
+│       └── <appname>/   # Per-app memory
+│           ├── profile.json      # App config + metadata
+│           ├── components/       # Learned UI components
+│           └── workflows/        # Saved workflows
 ├── scripts/              # Core scripts
-│   ├── ui_detector.py    # Detection engine
+│   ├── ui_detector.py    # Detection engine (YOLO + OCR)
 │   ├── app_memory.py     # Memory management
 │   ├── gui_agent.py      # Task executor
-│   └── ...
-├── apps/                 # App UI config (JSON)
-├── docs/core.md          # Core principles
+│   └── agent.py          # Main agent (learn/plan/eval)
+├── docs/
+│   └── core.md           # Core principles
 └── README.md
 ```
+
+**Flow:**
+- `learn`: Detect UI → save to `memory/apps/<app>/components/`
+- `plan`: Analyze components → create workflow → save to `memory/apps/<app>/workflows/`
+- `eval`: Check if memory is fresh enough
