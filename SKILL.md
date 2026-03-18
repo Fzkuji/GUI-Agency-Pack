@@ -491,6 +491,7 @@ After completing a multi-step GUI task successfully:
    ```
 3. **If exists**: Update it if you learned something new (e.g. new dialog appeared)
 4. **Workflow names**: use snake_case, descriptive (e.g. `smart_scan_cleanup`, `check_usage`)
+5. **Description**: one-line summary, **max 30 words** (e.g. "Scan and clean Mac junk files")
 
 ### Running a known workflow
 

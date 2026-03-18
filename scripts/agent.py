@@ -418,10 +418,13 @@ def save_workflow(app_name, workflow_name, steps, description=None, notes=None):
     """Save a workflow's steps to app memory for future reference.
 
     Each workflow records:
-    - description: one-line summary for intent matching (REQUIRED)
+    - description: one-line summary for intent matching (REQUIRED, max 30 words)
     - steps: list of {action, target, result, timestamp}
     - notes: lessons learned (OCR quirks, timing, etc.)
     """
+    if description and len(description.split()) > 30:
+        print(f"⚠ Description too long ({len(description.split())} words, max 30). Truncating.")
+        description = " ".join(description.split()[:30])
     app_dir = MEMORY_DIR / app_name.lower().replace(" ", "_")
     app_dir.mkdir(parents=True, exist_ok=True)
 
