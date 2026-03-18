@@ -145,8 +145,14 @@ def detect_icons(img_path, conf=0.1, iou=0.3):
 # Apple Vision OCR
 # ═══════════════════════════════════════════
 
-def detect_text(img_path):
-    """Detect text using Apple Vision framework."""
+def detect_text(img_path, return_logical=True):
+    """Detect text using Apple Vision framework.
+
+    Args:
+        img_path: path to screenshot image
+        return_logical: if True, auto-convert retina coords to logical coords.
+                       Detects scale by comparing image width to screen logical width.
+    """
     swift_code = r'''
 import Vision
 import AppKit
@@ -201,13 +207,39 @@ print(String(data: data, encoding: .utf8)!)
     elements = []
     try:
         raw = json.loads(r.stdout.strip())
+
+        # Auto-detect scale: if image is retina, coords need to be divided
+        scale = 1
+        if return_logical and raw:
+            try:
+                import cv2
+                img = cv2.imread(img_path)
+                if img is not None:
+                    pixel_w = img.shape[1]
+                    # Screen logical width (most common macOS resolutions)
+                    # If pixel width > 2000, it's likely retina
+                    if pixel_w > 2000:
+                        scale = 2  # Retina 2x
+                        # Try to get exact logical width
+                        try:
+                            sr = subprocess.run(["osascript", "-e",
+                                'tell application "Finder" to get bounds of window of desktop'],
+                                capture_output=True, text=True, timeout=3)
+                            if sr.stdout.strip():
+                                logical_w = int(sr.stdout.strip().split(", ")[2])
+                                scale = round(pixel_w / logical_w)
+                        except:
+                            pass
+            except:
+                pass
+
         for item in raw:
             elements.append({
                 "type": "text",
                 "source": "vision_ocr",
-                "x": item["x"], "y": item["y"],
-                "w": item["w"], "h": item["h"],
-                "cx": item["cx"], "cy": item["cy"],
+                "x": item["x"] // scale, "y": item["y"] // scale,
+                "w": item["w"] // scale, "h": item["h"] // scale,
+                "cx": item["cx"] // scale, "cy": item["cy"] // scale,
                 "confidence": round(item.get("conf", 0), 3),
                 "label": item["text"],
             })

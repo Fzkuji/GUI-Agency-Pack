@@ -319,18 +319,18 @@ def observe_state(app_name):
     sys.path.insert(0, str(SCRIPT_DIR))
     try:
         import ui_detector
-        raw_text = ui_detector.detect_text("/tmp/_observe.png")
-        # Convert retina coords to logical (screen) coords
+        raw_text = ui_detector.detect_text("/tmp/_observe.png", return_logical=True)
+        # detect_text auto-converts retina→logical, coords ready for cliclick
         all_text = []
         for t in raw_text:
             all_text.append({
                 "text": t.get("label", ""),
-                "cx": t.get("cx", 0) // RETINA_SCALE,
-                "cy": t.get("cy", 0) // RETINA_SCALE,
-                "x": t.get("x", 0) // RETINA_SCALE,
-                "y": t.get("y", 0) // RETINA_SCALE,
-                "w": t.get("w", 0) // RETINA_SCALE,
-                "h": t.get("h", 0) // RETINA_SCALE,
+                "cx": t.get("cx", 0),
+                "cy": t.get("cy", 0),
+                "x": t.get("x", 0),
+                "y": t.get("y", 0),
+                "w": t.get("w", 0),
+                "h": t.get("h", 0),
             })
 
         # Filter to target window area
