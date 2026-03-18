@@ -1081,23 +1081,29 @@ def action_open_app(app_name):
 
 
 def action_navigate_browser(url):
-    """Navigate browser to URL — visually: activate Chrome, click address bar, paste URL, Enter."""
+    """Navigate browser to URL — visually: activate Chrome, Cmd+L address bar, paste URL, Enter."""
     app_name = "Google Chrome"
     activate_app(app_name)
     time.sleep(0.5)
 
-    # Cmd+L to focus address bar (works in all browsers)
-    subprocess.run(["/opt/homebrew/bin/cliclick", "kp:command-l"], capture_output=True, timeout=5)
+    # Cmd+L to focus address bar
+    subprocess.run(["osascript", "-e",
+        'tell application "System Events" to keystroke "l" using command down'],
+        capture_output=True, timeout=5)
     time.sleep(0.3)
 
     # Paste URL into address bar
-    subprocess.run(["bash", "-c", f'echo -n "{url}" | LANG=en_US.UTF-8 pbcopy'], capture_output=True, timeout=5)
+    subprocess.run(["bash", "-c", f'echo -n "{url}" | LANG=en_US.UTF-8 pbcopy'],
+        capture_output=True, timeout=5)
     time.sleep(0.1)
-    subprocess.run(["/opt/homebrew/bin/cliclick", "kp:command-v"], capture_output=True, timeout=5)
+    subprocess.run(["osascript", "-e",
+        'tell application "System Events" to keystroke "v" using command down'],
+        capture_output=True, timeout=5)
     time.sleep(0.3)
 
     # Press Enter to navigate
-    subprocess.run(["/opt/homebrew/bin/cliclick", "kp:return"], capture_output=True, timeout=5)
+    subprocess.run(["/opt/homebrew/bin/cliclick", "kp:return"],
+        capture_output=True, timeout=5)
     time.sleep(3)
 
     print(f"  🌐 Navigated to {url}")

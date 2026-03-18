@@ -72,14 +72,6 @@ Only save **stable UI elements** — things that look the same next session:
 
 **Quick test**: "Same place, same appearance tomorrow?" → KEEP. Otherwise → REMOVE.
 
-## Memory Rules
-
-1. **Filename = content**: `chat_button.png`, NOT `icon_0_170_103.png`
-2. **Dedup**: similarity > 0.92 = duplicate → keep ONE
-3. **Cleanup**: `agent.py cleanup --app AppName`
-4. **Per-app, per-page**: each app has its own directory
-5. **Privacy**: personal info → delete, never save
-
 ## Post-Learn Checklist
 
 - [ ] No `unlabeled_` files remain
@@ -100,16 +92,4 @@ Task arrives → ensure_app_ready(app, workflow)
         └── < 80% → incremental learn
 ```
 
-## Browser Per-Site Memory
-
-Browsers have two layers — the app chrome (tabs, address bar) is fixed, but each website has different content. Learn them separately:
-
-```
-memory/apps/google_chrome/
-├── profile.json, components/   # Browser chrome (learn once)
-└── sites/<domain>/             # Per-website memory
-    ├── profile.json, components/, pages/
-```
-
-**Save per site**: nav bars, menus, search boxes, filter controls, login buttons, logos
-**Don't save**: search results, article content, prices, ads, user-generated content
+For memory rules, naming, dedup, privacy, and browser per-site memory → see `skills/gui-memory/SKILL.md`.

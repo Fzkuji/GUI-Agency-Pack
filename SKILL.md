@@ -20,6 +20,7 @@ Each step has detailed instructions in its own skill file:
 | **Observe** | `skills/gui-observe/SKILL.md` | Before any action — screenshot, OCR, identify state |
 | **Learn** | `skills/gui-learn/SKILL.md` | App not in memory, or match rate < 80% |
 | **Act** | `skills/gui-act/SKILL.md` | Clicking, typing, sending messages, waiting for UI |
+| **Memory** | `skills/gui-memory/SKILL.md` | Visual memory — profiles, components, pages, CRUD, cleanup |
 | **Workflow** | `skills/gui-workflow/SKILL.md` | Intent matching, saving/replaying workflows, meta-workflows |
 | **Setup** | `skills/gui-setup/SKILL.md` | First-time setup on a new machine |
 
@@ -127,51 +128,9 @@ These exist because of real bugs:
 6. **Never send screenshots to conversation** — internal detection only
 
 ## Memory System
+→ Details: `skills/gui-memory/SKILL.md`
 
-```
-memory/apps/<appname>/
-├── profile.json        # Component registry + page/region/overlay structure
-├── summary.json        # App overview
-├── components/         # Cropped component images (PNG)
-├── pages/              # Annotated screenshots
-└── workflows/          # Saved workflow sequences
-
-memory/meta_workflows/  # Cross-app orchestration
-```
-
-### Profile Structure
-
-```json
-{
-  "app": "AppName",
-  "window_size": [w, h],
-  "pages": {
-    "main": {
-      "fingerprint": { "expect_text": ["Chat", "Cowork"] },
-      "regions": {
-        "sidebar": { "position": "left", "stable": true, "components": ["Search"] }
-      },
-      "transitions": { "Cmd+,": { "to": "settings" } }
-    }
-  },
-  "overlays": {
-    "menu": { "trigger": "profile_area", "dismiss": ["Esc"] }
-  },
-  "components": {
-    "Search": { "type": "icon", "rel_x": 116, "rel_y": 144, "page": "main" }
-  }
-}
-```
-
-### Key Concepts
-
-| Concept | Description |
-|---------|------------|
-| **Page** | Full UI state, mutually exclusive (main, settings) |
-| **Region** | Area within a page (sidebar, toolbar, content) |
-| **Overlay** | Temporary popup over a page (menu, dialog) |
-| **Fingerprint** | Text to identify current page |
-| **Transition** | State change on click/key |
+Visual memory stores app profiles, components, page fingerprints, workflows. See gui-memory for directory structure, profile schema, CRUD operations, and cleanup rules.
 
 ## File Structure
 
@@ -182,6 +141,7 @@ gui-agent/
 │   ├── gui-observe/SKILL.md
 │   ├── gui-learn/SKILL.md
 │   ├── gui-act/SKILL.md
+│   ├── gui-memory/SKILL.md
 │   ├── gui-workflow/SKILL.md
 │   └── gui-setup/SKILL.md
 ├── scripts/              # Core scripts
