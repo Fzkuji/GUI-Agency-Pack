@@ -102,20 +102,30 @@ GPA-GUI-Detector + Apple Vision OCR are used for all apps by default:
 Each app gets a memory directory with learned components:
 
 ```
-memory/apps/
-├── wechat/
-│   ├── profile.json          # Component registry (coords, labels, types)
-│   ├── icons/                # Cropped component images (PNG)
-│   │   ├── Q_Search.png
-│   │   ├── ContactName.png
-│   │   ├── icon_11_173_225.png  (unlabeled → LLM identifies later)
-│   │   └── ...
-│   └── pages/
-│       ├── main_annotated.jpg   # Annotated screenshot
-│       └── main.json            # Page layout
-├── discord/
+memory/apps/<appname>/
+├── profile.json          # Component registry (app info, window bounds)
+├── summary.json         # App overview (pages, workflows)
+├── icons/              # Cropped component images (PNG)
+│   ├── folder_icon.png
+│   ├── button_search.png
+│   ├── icon_0.png      # Unlabeled → LLM identifies later
 │   └── ...
+├── pages/              # Per-page detection results
+│   ├── <page_name>.json      # Detection results (elements array)
+│   ├── <page_name>.png       # Raw window screenshot
+│   └── <page_name>_annotated.jpg  # Annotated image
+└── workflows/          # Saved workflow sequences
+    └── <workflow_name>.json
 ```
+
+### What Gets Saved
+
+1. **icons/** - Each YOLO-detected component cropped and saved
+2. **pages/*.png** - Raw window screenshot
+3. **pages/*.json** - Detection results (type, bbox, label for each element)
+4. **pages/*_annotated.jpg** - Visualization with bounding boxes
+5. **profile.json** - App metadata
+6. **summary.json** - App overview with pages and workflows
 
 ### Key Design Decisions
 
