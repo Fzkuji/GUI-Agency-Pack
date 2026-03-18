@@ -423,14 +423,29 @@ This is enforced at two levels:
 **This applies even when you bypass agent.py and use cliclick directly.**
 **No exceptions. No "I forgot". Write it every time.**
 
+### STEP -1: INTENT MATCHING (before anything else)
+
+When you receive a GUI task, BEFORE doing anything:
+
+1. **Identify the target app** from the user's request
+2. **List existing workflows**: `python3 agent.py workflows --app AppName`
+3. **Match intent to workflow**: Does the user's request match any saved workflow?
+   - User says "清理电脑" → matches `smart_scan_cleanup` workflow
+   - User says "帮我扫一下垃圾" → also matches `smart_scan_cleanup`
+   - User says "看看 Claude 用量" → matches `check_usage` workflow
+   - **You are the LLM — use semantic understanding, not string matching**
+4. **If matched**: Load the workflow, skip to STEP 0 with the workflow steps as your plan
+5. **If no match**: Proceed normally (observe → plan → act), and **save the workflow after success**
+
 ### STEP 0: OBSERVE before anything
 
 Before ANY task, FIRST observe the current state:
-1. Screenshot the screen
-2. What app is in the foreground?
-3. Is the target app visible? What page/state is it in?
-4. Any popups, dialogs, overlays blocking?
-5. ONLY after understanding current state, proceed
+1. **Call `session_status`** — record context size for token delta reporting
+2. Screenshot the screen
+3. What app is in the foreground?
+4. Is the target app visible? What page/state is it in?
+5. Any popups, dialogs, overlays blocking?
+6. ONLY after understanding current state, proceed
 
 DO NOT skip this. DO NOT assume you know the state from last time.
 
@@ -457,6 +472,26 @@ After any click/type/send:
 3. Am I in the expected next state?
 4. If NOT: something went wrong. Re-observe and decide.
 
+### STEP: SAVE WORKFLOW (after successful task completion)
+
+After completing a multi-step GUI task successfully:
+
+1. **Check if a workflow already exists** for this task
+2. **If not**: Save it with `save_workflow()` in agent.py:
+   ```python
+   save_workflow("CleanMyMac X", "smart_scan_cleanup", [
+       {"action": "open", "target": "CleanMyMac X"},
+       {"action": "click", "target": "Start_Over", "note": "only if on results page"},
+       {"action": "click", "target": "Scan", "note": "bottom center button"},
+       {"action": "wait_for", "target": "Run", "timeout": 120},
+       {"action": "click", "target": "Run"},
+       {"action": "wait_for", "target": "Ignore", "timeout": 30, "note": "quit apps dialog, may not appear"},
+       {"action": "click", "target": "Ignore", "note": "skip quitting apps"},
+   ], notes=["Ignore dialog appears if Chrome/Discord/Cursor/Claude running"])
+   ```
+3. **If exists**: Update it if you learned something new (e.g. new dialog appeared)
+4. **Workflow names**: use snake_case, descriptive (e.g. `smart_scan_cleanup`, `check_usage`)
+
 ### Running a known workflow
 
 DO NOT blindly replay all steps from memory. INSTEAD:
@@ -466,6 +501,15 @@ DO NOT blindly replay all steps from memory. INSTEAD:
 4. Execute ONLY the next needed step
 5. After each step: verify state changed, then next step
 6. If state does not match any known step: STOP and trigger plan (learn + analyze)
+
+### Waiting for async UI changes
+
+When an action triggers a slow process (scan, download, loading):
+1. **Use `wait_for`**: `python3 agent.py wait_for --app AppName --component ComponentName`
+2. Template match polls every 10s (~0.3s per check), 120s timeout
+3. On success: returns coordinates, proceed to click
+4. On timeout: saves screenshot, **DO NOT blind-click** — inspect the screenshot and decide
+5. **NEVER use `sleep(60)` + blind click** — always verify the target exists before clicking
 
 ### Explore (Manual Trigger)
 
