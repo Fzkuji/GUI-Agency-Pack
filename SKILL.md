@@ -114,7 +114,9 @@ Use `tracker.py history` to review cumulative costs across tasks.
 3. **No wrong-app learning** — validate frontmost app before learn
 4. **Reject tiny templates** — <30×30 pixels produce false matches
 5. **Never send screenshots to chat** — internal detection only
-6. **NEVER quit the communication app** — if a dialog asks to quit apps (like CleanMyMac's "Quit All"), NEVER quit Discord/Telegram/WhatsApp or whatever channel you're communicating through. Instead: click individual Quit buttons for other apps, or click "Ignore" to skip. Quitting the comms app disconnects you from the user.
+6. **NEVER quit the communication app** — if a dialog asks to quit apps (like CleanMyMac's "Quit All"), NEVER quit Discord/Telegram/WhatsApp or whatever channel you're communicating through. Instead: click "Ignore" to skip. Quitting the comms app disconnects you from the user.
+7. **Known dialogs** — some actions always trigger predictable dialogs:
+   - **CleanMyMac "Run" button** → always pops a "quit apps" dialog. After clicking Run, immediately click "Ignore" at the known position without re-scanning. Don't waste time on OCR/screenshot for a dialog you already know will appear.
 7. **Every click uses `click_and_record` or `click_component`** — never raw `click_at()`. Every click must record a state transition.
 
 ## Input Methods (platform_input.py)

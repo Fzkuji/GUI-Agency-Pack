@@ -1445,27 +1445,16 @@ def click_and_record(app_name, label, x, y):
     Returns: (success, message, after_visible_components)
     """
     from platform_input import click_at, verify_frontmost, activate_app as pi_activate
-
-    # Pre-click: detect visible components + OCR text
     import subprocess as _sp
     import cv2 as _cv2
+    import ui_detector
+
+    # Pre-click: lightweight — template match only (no OCR), ~2s
     _sp.run(["screencapture", "-x", "/tmp/_click_rec.png"],
             capture_output=True, timeout=5)
     before_screen = _cv2.imread("/tmp/_click_rec.png")
     before_visible = _detect_visible_components(app_name, screen_img=before_screen)
-    
-    # Also get OCR text for state identification (works without saved templates)
-    import ui_detector
-    before_texts = set()
-    try:
-        text_elems = ui_detector.detect_text("/tmp/_click_rec.png", return_logical=True)
-        before_texts = set(e.get("label", "") for e in text_elems if e.get("label"))
-    except Exception:
-        pass
-    
-    # Combine for state identification
-    before_all = before_visible | before_texts
-    from_state, _ = identify_state_by_components(app_name, before_all)
+    from_state, _ = identify_state_by_components(app_name, before_visible)
 
     # Click
     click_at(x, y)
@@ -1478,7 +1467,7 @@ def click_and_record(app_name, label, x, y):
         time.sleep(0.5)
         return False, f"App switched to '{actual_app}'", set()
 
-    # Post-click: detect
+    # Post-click: full detection — template match + OCR, ~3s
     time.sleep(0.3)
     _sp.run(["screencapture", "-x", "/tmp/_click_rec2.png"],
             capture_output=True, timeout=5)
@@ -1493,6 +1482,8 @@ def click_and_record(app_name, label, x, y):
         pass
     
     after_all = after_visible | after_texts
+    # For change detection, compare against template-only before set
+    before_all = before_visible
     
     # Calculate changes (use combined sets)
     appeared = after_all - before_all
