@@ -177,6 +177,7 @@ def load_profile(app_name):
         "app": app_name,
         "components": {},  # name -> {type, rel_x, rel_y, icon_file, label, ...}
         "states": {},      # state_name -> {visible: [...], trigger, trigger_pos, disappeared, description}
+        "transitions": [],  # [{from: state, click: component, to: state, count: N}, ...]
         "last_updated": None,
         "window_size": None,
     }
@@ -414,6 +415,127 @@ def save_profile(app_name, profile):
     profile["last_updated"] = time.strftime("%Y-%m-%d %H:%M:%S")
     with open(app_dir / "profile.json", "w") as f:
         json.dump(profile, f, indent=2, ensure_ascii=False)
+
+
+def identify_state_by_components(app_name, visible_components):
+    """Identify current state by matching visible component names against known states.
+    
+    Uses F1 score (harmonic mean of precision and recall) to avoid matching
+    a small state that happens to be a subset of the current screen.
+    
+    - Precision: what % of state's components are visible (recall of state)
+    - Recall: what % of visible components are in the state (precision of visible)
+    - F1 balances both — prefers states that closely match current screen
+    
+    Args:
+        app_name: App name
+        visible_components: set of component names currently visible
+        
+    Returns:
+        (state_name, f1_score) or (None, 0)
+    """
+    profile = load_profile(app_name)
+    states = profile.get("states", {})
+    
+    if not states or not visible_components:
+        return None, 0
+    
+    best_state = None
+    best_f1 = 0.0
+    
+    for state_name, state_data in states.items():
+        state_visible = set(state_data.get("visible", []))
+        if not state_visible:
+            continue
+        overlap = len(visible_components & state_visible)
+        precision = overlap / len(state_visible)       # how much of state is visible
+        recall = overlap / len(visible_components)      # how much of visible is in state
+        if precision + recall == 0:
+            continue
+        f1 = 2 * precision * recall / (precision + recall)
+        if f1 > best_f1:
+            best_f1 = f1
+            best_state = state_name
+    
+    return best_state, best_f1
+
+
+def record_transition(app_name, from_state, click_component, to_state):
+    """Record a state transition: from_state --click--> to_state.
+    
+    If this transition already exists, increment its count.
+    """
+    profile = load_profile(app_name)
+    if "transitions" not in profile:
+        profile["transitions"] = []
+    
+    # Check if transition already exists
+    for t in profile["transitions"]:
+        if (t["from"] == from_state and t["click"] == click_component 
+            and t["to"] == to_state):
+            t["count"] = t.get("count", 1) + 1
+            save_profile(app_name, profile)
+            return
+    
+    # New transition
+    profile["transitions"].append({
+        "from": from_state,
+        "click": click_component,
+        "to": to_state,
+        "count": 1,
+    })
+    save_profile(app_name, profile)
+
+
+def find_path(app_name, from_state, to_state):
+    """BFS to find shortest click path between two states.
+    
+    Returns: list of (click_component, next_state) tuples, or None if no path.
+    
+    Example: find_path("WeChat", "contacts_page", "宋文涛_chat")
+    → [("chat_tab", "chat_page"), ("宋文涛", "宋文涛_chat")]
+    """
+    profile = load_profile(app_name)
+    transitions = profile.get("transitions", [])
+    
+    if not transitions:
+        return None
+    
+    if from_state == to_state:
+        return []
+    
+    # Build adjacency: state -> [(click, to_state), ...]
+    graph = {}
+    for t in transitions:
+        src = t["from"]
+        if src not in graph:
+            graph[src] = []
+        graph[src].append((t["click"], t["to"]))
+    
+    # BFS
+    from collections import deque
+    queue = deque([(from_state, [])])
+    visited = {from_state}
+    
+    while queue:
+        current, path = queue.popleft()
+        for click, next_state in graph.get(current, []):
+            if next_state == to_state:
+                return path + [(click, next_state)]
+            if next_state not in visited:
+                visited.add(next_state)
+                queue.append((next_state, path + [(click, next_state)]))
+    
+    return None  # No path found
+
+
+def get_transitions(app_name):
+    """Get all recorded transitions for an app.
+    
+    Returns: list of {from, click, to, count} dicts.
+    """
+    profile = load_profile(app_name)
+    return profile.get("transitions", [])
 
 
 def save_component_icon(app_name, component_name, img, bbox, retina_scale=2):
@@ -1381,11 +1503,24 @@ def click_component(app_name, component_name, verify=True):
         else:
             print(f"  💾 Saved state '{state_name}' (no new components detected)")
 
-    # 9. Report current state for agent decision-making
-    print(f"  📊 Currently visible: {len(after_visible)} components")
+    # 9. Record state transition (from_state --click--> to_state)
+    #    Use the state saved for this click as to_state (click:{component})
+    #    The from_state is whatever best matches before_visible
+    from_state, from_f1 = identify_state_by_components(app_name, before_visible)
+    to_state_name = f"click:{component_name}"  # The state after clicking this component
+    
+    # Only record if we had a meaningful from_state and there was actual change
+    if from_state and (appeared or disappeared) and from_state != to_state_name:
+        record_transition(app_name, from_state, component_name, to_state_name)
+        print(f"  🔗 Transition: {from_state} --{component_name}--> {to_state_name}")
+    elif not from_state and (appeared or disappeared):
+        # Unknown from_state — save current as "unknown" but still record
+        print(f"  🔗 Transition: (unknown) --{component_name}--> {to_state_name}")
+
+    # 10. Report current state for agent decision-making
+    print(f"  📊 State: {to_state_name} | {len(after_visible)} components visible")
     if after_visible:
-        # Print a compact summary — agent uses this to decide next action
-        summary = sorted(after_visible)[:15]  # Top 15 to avoid spam
+        summary = sorted(after_visible)[:15]
         if len(after_visible) > 15:
             print(f"  📋 Components: {', '.join(summary)} ... (+{len(after_visible)-15} more)")
         else:
@@ -1485,6 +1620,14 @@ def main():
     p_verify = sub.add_parser("verify", help="Verify contact before sending")
     p_verify.add_argument("--app", required=True)
     p_verify.add_argument("--contact", required=True)
+
+    p_trans = sub.add_parser("transitions", help="Show recorded state transitions")
+    p_trans.add_argument("--app", required=True)
+
+    p_path = sub.add_parser("path", help="Find click path between states")
+    p_path.add_argument("--app", required=True)
+    p_path.add_argument("--component", required=True, help="from_state")
+    p_path.add_argument("--contact", required=True, help="to_state")
 
     args = parser.parse_args()
 
@@ -1631,6 +1774,28 @@ def main():
     elif args.command == "verify":
         ok, reason = verify_before_send(args.app, args.contact, "")
         print(f"{'✅' if ok else '❌'} {reason}")
+
+    elif args.command == "transitions":
+        transitions = get_transitions(args.app)
+        if not transitions:
+            print("No transitions recorded yet.")
+        else:
+            print(f"State transitions for {args.app}:")
+            for t in transitions:
+                print(f"  {t['from']} --{t['click']}--> {t['to']} (×{t.get('count',1)})")
+
+    elif args.command == "path":
+        from_s = getattr(args, 'from_state', None) or args.component  # reuse --component for from
+        to_s = getattr(args, 'to_state', None) or args.contact  # reuse --contact for to
+        path = find_path(args.app, from_s, to_s)
+        if path is None:
+            print(f"No path from '{from_s}' to '{to_s}'")
+        elif not path:
+            print(f"Already at '{to_s}'")
+        else:
+            print(f"Path from '{from_s}' to '{to_s}':")
+            for click, next_state in path:
+                print(f"  → click '{click}' → {next_state}")
 
 
 if __name__ == "__main__":
