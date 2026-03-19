@@ -1,44 +1,19 @@
 ---
 name: gui-act
-description: "Execute GUI actions — click components, type text, send messages. Includes pre-action verification, post-action verification, and async wait handling."
+description: "Execute GUI actions — click, type, send messages. Auto-verification via state detection."
 ---
 
 # Act — Execute and Verify
 
 ## How coordinates work
 
-**ALL click coordinates come from detection — template matching or YOLO.**
-
-| Content type | Detection method | How |
+| Content type | Method | Precision |
 |---|---|---|
-| Known component (saved template) | Template matching | `click_component` / `match_on_fullscreen` → pixel-precise |
-| Unknown/new UI element | YOLO detection | `agent.py detect` → bounding boxes → click bbox center |
-| Dynamic content (popup, menu) | YOLO or learn new state | Screenshot → detect → if not found, learn → then match |
+| Saved component | Template matching (`click_component`) | Pixel-precise (conf≈1.0) |
+| Dynamic content (menu, search result) | YOLO/OCR detection (`detect_all`) | Bbox-precise |
+| Unknown element | Learn first, then template match | Pixel-precise |
 
-**`image` tool = understanding only.** Use it to analyze screenshots ("what's on screen?", "which element should I click?", "did the action work?"). NEVER ask it for pixel coordinates.
-
-Detection priority: **Template Match (0.3s) → YOLO (0.3s)**
-
-## MANDATORY: Screenshot Before AND After Every Click
-
-```
-1. Screenshot (full screen) → use `image` tool to UNDERSTAND the state
-2. Locate target via template match or YOLO detection (precise coordinates)
-3. Click using detection coordinates
-4. Screenshot (full screen) → use `image` tool to VERIFY the result
-5. If NO change → click failed. Re-detect, don't repeat blindly.
-6. If WRONG app in front → Esc, re-activate target app, re-detect.
-```
-
-This is NOT optional. Every single click gets a before/after screenshot.
-`click_component` does this automatically. Manual clicks must do it explicitly.
-
-## Pre-Click Verify (before every click)
-
-1. Is the element actually on screen RIGHT NOW? (screenshot + image analysis)
-2. Is it the CORRECT element (not similar name in another window)?
-3. Is the TARGET APP in the foreground? (check menu bar in screenshot)
-4. If ANY is NO → re-observe. Do not click.
+**`image` tool = understanding only.** Never ask it for coordinates.
 
 ## Clicking a Known Component
 
@@ -46,111 +21,69 @@ This is NOT optional. Every single click gets a before/after screenshot.
 python3 scripts/agent.py click --app AppName --component ButtonName
 ```
 
-This does full-screen template matching automatically:
-```
-1. Take full-screen screenshot (before)
-2. Template match component on full screen → screen logical coordinates
-3. If matched (conf > 0.7): click at logical coordinates
-4. Take full-screen screenshot (after)
-5. Verify screen changed + correct app still in front
-6. If not matched → learn the app, then retry
+Or directly:
+```python
+from app_memory import click_component
+ok, msg = click_component(app_name, component_name)
 ```
 
-### For elements NOT in memory (dynamic content):
+`click_component` does everything automatically:
+1. Screenshot (one, shared)
+2. Detect visible components before click
+3. Template match target → precise coordinates
+4. Click
+5. Detect visible components after click
+6. Verify state (first time: learn, repeat: compare)
+7. Record state transition
+8. Report visible components
 
-```
-1. Screenshot full screen
-2. Crop the relevant region (e.g., search results area)
-3. Use `image` tool on crop to identify what's there
-4. Calculate screen coordinates: crop_origin + element_position_in_crop
-5. Click at calculated coordinates
-6. Screenshot to verify
-```
+## Clicking Dynamic Content
 
-**NEVER ask the `image` tool for coordinates on a full screenshot.** Vision models
-can't reliably pinpoint pixels on large images. Always crop first, then analyze.
-
-## Input Methods (via platform_input.py)
-
-All input goes through `platform_input.py` (cross-platform, uses pynput):
+For elements without saved templates (menus, search results, chat messages):
 
 ```python
-from platform_input import click_at, type_text, paste_text, key_press, key_combo, set_clipboard, screenshot
-
-# Click (logical screen coords)
-click_at(x, y)
-
-# Type ASCII
-type_text("hello")
-
-# Paste CJK/special chars (clipboard + Cmd+V)
-paste_text("中文")
-
-# Key press
-key_press("return")   # also: esc, tab, delete, space
-
-# Key combo
-key_combo("command", "v")
-key_combo("command", "shift", "s")
-
-# Screenshot (for verification)
-screenshot("/tmp/check.png")
+import ui_detector
+elements = ui_detector.detect_all(fullscreen=True, include_ax=False)
+# Find target by label
+for e in elements[0]:
+    if e.get('label') == 'target_text':
+        click_at(e['cx'], e['cy'])  # OCR coords are logical
 ```
 
-**Never use cliclick or osascript for input.** Those are macOS-only and removed.
+OCR returns logical coordinates. YOLO returns physical (÷2 for logical).
+
+## Not Found?
+
+Component not matching (conf < 0.8) means it's **not on screen** in its saved form:
+- Different visual state (selected vs unselected tab)
+- Different page
+- App not in foreground
+
+**Don't lower the threshold.** Re-learn current state to discover what IS on screen.
+
+## Input Methods (platform_input.py)
+
+```python
+click_at(x, y)                    # Left click
+mouse_right_click(x, y)           # Right click (context menus)
+paste_text("中文")                 # Clipboard + Cmd+V (CJK safe)
+type_text("hello")                # Direct typing (ASCII only)
+key_press("return")               # Single key
+key_combo("command", "v")         # Key combination
+set_clipboard("text")             # Set clipboard
+get_clipboard()                   # Read clipboard
+screenshot("/tmp/check.png")      # Full screen capture
+```
 
 ## Sending Messages
 
-**No hardcoded flow.** Sending messages is a WORKFLOW, not a built-in action.
-New AI must explore the app to learn how to send, then save as workflow.
+No hardcoded flow. First time: follow steps manually with screenshot verification at each step. After success: save as workflow for replay.
 
-`agent.py send_message` prints step-by-step guidance but does NOT execute.
-The agent must execute each step manually with screenshot verification.
-
-### Generic steps (adapt per app):
-```
-1. SCREENSHOT → confirm app is frontmost
-2. Find contact (search bar or scroll chat list)
-3. SCREENSHOT → verify contact found (not internet search suggestion!)
-4. Click contact
-5. SCREENSHOT → verify chat header shows correct name
-6. Click message input field
-7. Paste message (set_clipboard + Cmd+V)
-8. SCREENSHOT → verify text is in input field
-9. Press Enter to send
-10. SCREENSHOT → verify message appears as sent bubble
-```
-
-### After first success → save workflow:
-```bash
-python3 agent.py save_workflow --app AppName --name send_message --steps '[...]'
-```
-
-Next time, `agent.py send_message` will load the saved workflow.
-
-## Waiting for Async UI Changes
-
-When an action triggers a slow process (scan, download, loading):
-
-```bash
-python3 scripts/agent.py wait_for --app AppName --component ComponentName
-```
-
-- Template match polls every 10s (~0.3s/check), 120s timeout
-- On success → returns coordinates, proceed
-- On timeout → saves screenshot. **Do NOT blind-click** — inspect and decide
-- Never use `sleep(60)` + blind click
-
-## Post-Action Verify (after every action)
-
-1. Screenshot again
-2. Did the expected change happen?
-3. Am I in the expected next state?
-4. If NOT → re-observe and decide
-
-## Web Form Input Quirks
-
-- **Autocomplete fields** (e.g., station selectors): typing alone is NOT enough — must click the dropdown suggestion
-- **Chinese input in web forms**: System IME interferes with autocomplete. Switch to English, type pinyin, let website autocomplete handle it
-- **Cmd+V in web forms**: May garble text. Use `type_text("text")` for ASCII/pinyin
-- **Date pickers**: Usually need calendar UI clicks, not typed dates
+Generic steps:
+1. Find contact (search or scroll) — use YOLO/OCR detection for coordinates
+2. Verify chat header shows correct contact — `image` tool for understanding
+3. Click input field — template match or YOLO detection
+4. Paste message — `paste_text()`
+5. Verify text in input — `image` tool or `get_clipboard()`
+6. Send — `key_press("return")`
+7. Verify sent — `image` tool

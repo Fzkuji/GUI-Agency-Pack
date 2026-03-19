@@ -5,160 +5,126 @@ description: "ALL interactions with ANY app — whether built-in (Finder, Safari
 
 # GUI Agent Skill
 
-You ARE the agent loop. Every GUI task follows this flow, in order:
+You ARE the agent loop. Every GUI task follows this flow:
 
 ```
-INTENT MATCH → OBSERVE → ENSURE APP READY → ACT → VERIFY → SAVE WORKFLOW → REPORT
+OBSERVE → ENSURE APP READY → ACT → VERIFY (auto) → RECORD TRANSITION → REPORT
 ```
 
-## Sub-Skills
-
-Each step has detailed instructions in its own skill file:
+## Sub-Skills (read on demand)
 
 | Step | Skill | When to read |
 |------|-------|-------------|
-| **Observe** | `skills/gui-observe/SKILL.md` | Before any action — screenshot, OCR, identify state |
-| **Learn** | `skills/gui-learn/SKILL.md` | App not in memory, or match rate < 80% |
-| **Act** | `skills/gui-act/SKILL.md` | Clicking, typing, sending messages, waiting for UI |
-| **Memory** | `skills/gui-memory/SKILL.md` | Visual memory — profiles, components, pages, CRUD, cleanup |
-| **Workflow** | `skills/gui-workflow/SKILL.md` | Intent matching, saving/replaying workflows, meta-workflows |
+| **Observe** | `skills/gui-observe/SKILL.md` | Before any action — screenshot, detect state |
+| **Learn** | `skills/gui-learn/SKILL.md` | App not in memory, or component not found |
+| **Act** | `skills/gui-act/SKILL.md` | Clicking, typing, sending messages |
+| **Memory** | `skills/gui-memory/SKILL.md` | Profiles, components, states, transitions |
+| **Workflow** | `skills/gui-workflow/SKILL.md` | State graph navigation, workflow replay |
 | **Setup** | `skills/gui-setup/SKILL.md` | First-time setup on a new machine |
 
-Read the relevant sub-skill when you reach that step. You don't need to read all of them upfront.
-
-## agent.py — Unified Entry Point
-
-**All GUI operations go through `scripts/agent.py`.** Do not call `app_memory.py` or `gui_agent.py` directly.
+## Core Commands
 
 ```bash
-source ~/gui-agent-env/bin/activate
+source ~/gui-actor-env/bin/activate
+cd ~/.openclaw/workspace/skills/gui-agent
 
-# Core operations
-python3 scripts/agent.py open --app AppName
-python3 scripts/agent.py learn --app AppName
-python3 scripts/agent.py detect --app AppName
+# Observe
+python3 scripts/agent.py learn --app AppName        # Detect + save components
+python3 scripts/agent.py detect --app AppName        # Match known components
+python3 scripts/agent.py list --app AppName          # List saved components
+
+# Act
 python3 scripts/agent.py click --app AppName --component ButtonName
-python3 scripts/agent.py list --app AppName
-python3 scripts/agent.py read_screen --app AppName
-python3 scripts/agent.py wait_for --app AppName --component X
+python3 scripts/agent.py open --app AppName
 python3 scripts/agent.py cleanup --app AppName
-python3 scripts/agent.py navigate --url "https://example.com"
-python3 scripts/agent.py workflows --app AppName
-python3 scripts/agent.py all_workflows
 
-# Messaging
+# State graph
+python3 scripts/app_memory.py transitions --app AppName     # View state graph
+python3 scripts/app_memory.py path --app AppName --component from_state --contact to_state  # Find route
+
+# Messaging (prints guidance, agent executes step by step)
 python3 scripts/agent.py send_message --app WeChat --contact "小明" --message "明天见"
-python3 scripts/agent.py read_messages --app WeChat --contact "小明"
 ```
-
-agent.py automatically handles:
-- New app → learn → plan
-- Known app → eval (template match; ≥80% proceed, <80% re-learn)
-- Error → re-learn + new plan
-- Chinese aliases: 微信→WeChat, 浏览器→Chrome
 
 ## Execution Flow
 
-### STEP -1: INTENT MATCHING
-→ Details: `skills/gui-workflow/SKILL.md`
-
-Match user request to saved workflows before doing anything. If matched, use workflow steps as plan. If not, proceed and save after success.
-
 ### STEP 0: OBSERVE
-→ Details: `skills/gui-observe/SKILL.md`
-
-Screenshot, identify current state. Record `session_status` for token reporting.
+Take screenshot. Use `image` tool to **understand** current state (what app, what page, what's visible). First time only — subsequent steps use component detection.
 
 ### STEP 1: ENSURE APP READY
-→ Details: `skills/gui-learn/SKILL.md`
+If app not in memory → `learn`. If component not found → `learn` current state.
+Component not matching ≠ lower threshold. It means the component isn't on screen — re-learn to discover what IS on screen.
 
-Check if app is in memory. If not → learn. If match rate < 80% → re-learn. This is YOUR responsibility — do not wait for the user.
+### STEP 2: ACT
+`click_component` handles everything automatically:
+1. Screenshot (one, shared for detection + matching)
+2. Detect visible components (template match, no LLM)
+3. Match target component → get precise coordinates
+4. Click
+5. Detect visible components again
+6. Record state transition (from → click → to)
+7. Report: appeared/disappeared components, current state
 
-### STEP 2: LEARN (when needed)
-→ Details: `skills/gui-learn/SKILL.md`
+### STEP 3: VERIFY (automatic)
+- **First click on X**: learns what appears/disappears → saves as `click:X` state
+- **Repeat click on X**: verifies expected components appeared (no screenshot needed)
+- **Mismatch**: agent should then screenshot + `image` tool to diagnose
 
-Detect all components (YOLO + OCR), identify them, filter, save to memory. Privacy check: delete personal info.
+### STEP 4: STATE TRANSITION (automatic)
+Every click records `(from_state, click_component, to_state)` in the state graph.
+Multiple clicks build a connected graph. Use `find_path()` to navigate between any two states.
 
-### STEP 3: ACT
-→ Details: `skills/gui-act/SKILL.md`
-
-Execute clicks, typing, sending. Pre-verify before every click. Pre-verify contact before every message send.
-
-### STEP 4: POST-ACTION VERIFY (automatic)
-
-`click_component` now auto-verifies by detecting which components appeared/disappeared:
-- **First time clicking X**: saves resulting state as `click:X` (learned expectation)
-- **Subsequent clicks on X**: verifies expected components appeared (no screenshot/LLM needed)
-- **Mismatch or failure**: agent should screenshot + analyze only then
-
-The agent reads the `📋 Components:` output to understand current state and decide next action.
-No need to screenshot + call `image` tool for routine verification.
-
-### STEP 5: SAVE WORKFLOW
-→ Details: `skills/gui-workflow/SKILL.md`
-
-Save successful multi-step sequences for future replay.
-
-### STEP 6: REPORT
-
-Every GUI task ends with a report:
+### STEP 5: REPORT
 ```
-⏱ 45.2s | 📊 +10k tokens (85k→95k) | 🔧 3 screenshots, 2 clicks, 1 learn
+⏱ 45.2s | 📊 +10k tokens | 🔧 3 clicks, 1 learn
 ```
-Compare `session_status` from STEP 0 vs now.
 
 ---
 
 ## Key Principles
 
-1. **Vision-driven, no shortcuts** — every GUI interaction goes through the visual pipeline (screenshot → detect → match → click). Do not use system commands (`open <url>`, `osascript tell app to set URL`, CLI tools) to manipulate app state. Only allowed: `activate` (bring window to front), `screencapture` (take screenshot), `platform_input.py` (click/type via pynput after visual detection provides coordinates). **Screenshot before AND after every click.**
-2. **Coordinates come from detection, NEVER from guessing:**
-   - **Known components** → template matching (`click_component` / `match_on_fullscreen`). Pixel-precise (conf≈1.0).
-   - **Unknown/dynamic content** (new popup, menu, search results) → screenshot → YOLO detection → get precise bounding boxes → click center of bbox.
-   - If detection misses the target → `learn` the current state to save new components, then template match.
-   - **`image` tool role = understanding, NOT positioning.** Use it to answer "what is this?", "which item should I click?", "did the screen change?". NEVER ask it for pixel coordinates.
-3. **Every clickable target must have a detection-based coordinate** — either from template matching (saved component) or from YOLO detection (fresh screenshot). No exceptions. If you can't detect it, learn it first.
-4. **Dynamic content workflow**: screenshot → YOLO detect all elements → identify which element to click (by label or `image` tool for understanding) → use the YOLO bbox center as click coordinate. If YOLO doesn't find it → learn the new state → template match.
-5. **Paste > Type** for CJK text and special chars
-6. **Learn incrementally** — save new components after each interaction
-7. **Integer coordinates only** — pynput uses logical screen coordinates (integers)
-8. **Learn once, match forever** — UI positions are stable unless app updates
+1. **Vision-driven, no shortcuts** — screenshot → detect → match → click. Only allowed system calls: `activate` (bring to front), `screencapture`, `platform_input.py` (pynput click/type).
+2. **Coordinates from detection only:**
+   - **Saved components** → template matching (conf≈1.0, pixel-precise)
+   - **Dynamic content** (menus, search results) → YOLO/OCR detection → bbox center
+   - **`image` tool = understanding only** ("what is this?", "which one?", "did it work?"). NEVER for coordinates.
+3. **Not found = not on screen** — don't lower thresholds. Re-learn current state to discover new components.
+4. **State graph drives navigation** — each click records a transition. Use `find_path()` to route between states.
+5. **First time: screenshot + image. Repeat: detection only** — saves tokens on known workflows.
+6. **Paste > Type** for CJK text
+7. **Integer logical coordinates** — pynput uses screen logical pixels
 
 ## Safety Rules
 
-These exist because of real bugs:
-
-1. **Verify before sending** — screenshot chat header, use `image` tool to confirm correct contact name
-2. **Every click gets before/after screenshots** — `click_component` does this automatically; manual clicks must do it explicitly
+1. **Full-screen search + window validation** — match on full screen, reject matches outside target app's window bounds
+2. **App switch detection** — `click_component` checks frontmost app after every click
 3. **No wrong-app learning** — validate frontmost app before learn
 4. **Reject tiny templates** — <30×30 pixels produce false matches
-5. **`image` tool = understanding only** — use it to analyze what's on screen, identify targets by name/meaning, verify actions. NEVER use it to get click coordinates. Coordinates come from template matching or YOLO detection only.
-6. **Never send screenshots to conversation** — internal detection only
-7. **If click has no effect** — screenshot, analyze what happened, don't repeat blindly. Possible causes: wrong app in front, window moved, click outside window, element not interactive.
+5. **Never send screenshots to chat** — internal detection only
 
-## Memory System
-→ Details: `skills/gui-memory/SKILL.md`
+## Input Methods (platform_input.py)
 
-Visual memory stores app profiles, components, page fingerprints, workflows. See gui-memory for directory structure, profile schema, CRUD operations, and cleanup rules.
+```python
+from platform_input import click_at, paste_text, key_press, key_combo, screenshot, 
+    activate_app, get_clipboard, set_clipboard, mouse_right_click
+```
+
+No cliclick. No osascript for input. pynput only.
 
 ## File Structure
 
 ```
 gui-agent/
-├── SKILL.md              # This file (main orchestrator)
+├── SKILL.md              # This file
 ├── skills/               # Sub-skills (read on demand)
-│   ├── gui-observe/SKILL.md
-│   ├── gui-learn/SKILL.md
-│   ├── gui-act/SKILL.md
-│   ├── gui-memory/SKILL.md
-│   ├── gui-workflow/SKILL.md
-│   └── gui-setup/SKILL.md
-├── scripts/              # Core scripts
-│   ├── agent.py, ui_detector.py, app_memory.py, gui_agent.py, template_match.py
+├── scripts/
+│   ├── agent.py          # CLI entry point
+│   ├── app_memory.py     # Components, states, transitions, matching
+│   ├── platform_input.py # Cross-platform input (pynput)
+│   ├── ui_detector.py    # YOLO + OCR detection
+│   └── template_match.py # Legacy template matching
 ├── memory/               # Visual memory (gitignored)
-│   ├── apps/<appname>/
+│   ├── apps/<appname>/profile.json  # Components + states + transitions
 │   └── meta_workflows/
-├── actions/              # Atomic operations
-├── docs/
 └── README.md
 ```
