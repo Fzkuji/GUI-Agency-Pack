@@ -1123,10 +1123,18 @@ def detect_with_memory(app_name, threshold=0.8):
 # Click: find component and click it
 # ═══════════════════════════════════════════
 
-def match_on_fullscreen(app_name, component_name, threshold=0.8):
-    """Match a component template on FULL SCREEN screenshot.
+def match_on_fullscreen(app_name, component_name, threshold=0.6, screen_img=None):
+    """Match a component template on screen, scoped to the app's window area.
 
-    No window offsets needed. Returns screen logical coords directly.
+    Searches within the app's window bounds (+padding) to avoid false matches
+    from other apps. Returns screen logical coords directly.
+    
+    Args:
+        app_name: App name
+        component_name: Component to find
+        threshold: Minimum match confidence (default 0.8)
+        screen_img: Pre-loaded full screen image (optional, avoids re-capture)
+    
     Returns: (found, logical_x, logical_y, confidence)
     """
     profile = load_profile(app_name)
@@ -1143,34 +1151,47 @@ def match_on_fullscreen(app_name, component_name, threshold=0.8):
     if template is None:
         return False, 0, 0, 0
 
-    # Take full screen screenshot
-    screen_path = "/tmp/gui_agent_fullscreen.png"
-    subprocess.run(["screencapture", "-x", screen_path], capture_output=True, timeout=5)
-    screen = cv2.imread(screen_path)
-    if screen is None:
+    # Take full screen screenshot (or reuse provided)
+    if screen_img is None:
+        screen_path = "/tmp/gui_agent_fullscreen.png"
+        subprocess.run(["screencapture", "-x", screen_path], capture_output=True, timeout=5)
+        screen_img = cv2.imread(screen_path)
+    if screen_img is None:
         return False, 0, 0, 0
 
-    # Template match on full screen (both in physical/retina pixels)
-    gray_screen = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
+    # Search strategy: window-scoped first, then full screen with bounds check
+    bounds = get_window_bounds(app_name)
+    
     gray_tpl = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-
-    if (gray_tpl.shape[0] > gray_screen.shape[0] or
-        gray_tpl.shape[1] > gray_screen.shape[1]):
-        return False, 0, 0, 0
-
-    result = cv2.matchTemplate(gray_screen, gray_tpl, cv2.TM_CCOEFF_NORMED)
-    _, max_val, _, max_loc = cv2.minMaxLoc(result)
-
-    if max_val < threshold:
-        return False, 0, 0, 0
-
-    # Physical pixel center of match → logical screen coords (÷2 for retina)
-    phys_x = max_loc[0] + template.shape[1] // 2
-    phys_y = max_loc[1] + template.shape[0] // 2
-    logical_x = phys_x // 2
-    logical_y = phys_y // 2
-
-    return True, logical_x, logical_y, round(max_val, 4)
+    
+    # Try 1: Window-scoped search (fast, no false matches from other apps)
+    if bounds:
+        wx, wy, ww, wh = bounds
+        pad = 30  # logical pixels padding
+        x1 = max(0, (wx - pad) * 2)
+        y1 = max(0, (wy - pad) * 2)
+        x2 = min(screen_img.shape[1], (wx + ww + pad) * 2)
+        y2 = min(screen_img.shape[0], (wy + wh + pad) * 2)
+        search_area = screen_img[y1:y2, x1:x2]
+        
+        gray_crop = cv2.cvtColor(search_area, cv2.COLOR_BGR2GRAY)
+        if (gray_tpl.shape[0] <= gray_crop.shape[0] and
+            gray_tpl.shape[1] <= gray_crop.shape[1]):
+            result = cv2.matchTemplate(gray_crop, gray_tpl, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, max_loc = cv2.minMaxLoc(result)
+            
+            if max_val >= threshold:
+                phys_x = x1 + max_loc[0] + template.shape[1] // 2
+                phys_y = y1 + max_loc[1] + template.shape[0] // 2
+                return True, phys_x // 2, phys_y // 2, round(max_val, 4)
+    
+    # No full-screen fallback — window-scoped only to prevent clicking other apps.
+    # If component not found in window area, it means:
+    # 1. Component appearance changed (e.g., selected vs unselected tab)
+    # 2. Component is not visible in current state
+    # 3. Window bounds are wrong
+    # In all cases, the agent should re-learn or use a different approach.
+    return False, 0, 0, 0
 
 
 def _detect_visible_components(app_name, screen_img=None):
@@ -1264,23 +1285,25 @@ def click_component(app_name, component_name, verify=True):
         click_at(screen_x, screen_y)
         return True, f"Clicked system component {component_name}"
 
-    # 1. PRE-CLICK: screenshot once, reuse for match + detection
-    import subprocess, cv2
-    subprocess.run(["screencapture", "-x", "/tmp/_click_screen.png"],
-                   capture_output=True, timeout=5)
-    before_screen = cv2.imread("/tmp/_click_screen.png")
+    # 1. PRE-CLICK: one screenshot, reuse for everything
+    import subprocess as _sp
+    import cv2 as _cv2
+    _sp.run(["screencapture", "-x", "/tmp/_click_screen.png"],
+            capture_output=True, timeout=5)
+    before_screen = _cv2.imread("/tmp/_click_screen.png")
     before_visible = _detect_visible_components(app_name, screen_img=before_screen)
 
-    # 2. Match target on full screen
-    found, screen_x, screen_y, conf = match_on_fullscreen(app_name, component_name)
+    # 2. Match target (using same screenshot, scoped to window)
+    found, screen_x, screen_y, conf = match_on_fullscreen(
+        app_name, component_name, screen_img=before_screen)
 
     if not found:
         return False, f"Component '{component_name}' not found (no template match on screen)"
 
     print(f"  🎯 Found '{component_name}' → screen({screen_x},{screen_y}) conf={conf}")
 
-    # 3. Verify confidence
-    if verify and conf < 0.7:
+    # 3. Verify confidence (same threshold as match_on_fullscreen)
+    if verify and conf < 0.6:
         return False, f"Low confidence ({conf}), not clicking"
 
     # 4. Check if we have an expected state for this click

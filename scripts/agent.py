@@ -1193,35 +1193,27 @@ def action_read_messages(app_name, contact=None):
 
 
 def action_click_component(app_name, component):
-    """Click a named component. Full protocol: observe → verify → click → confirm."""
+    """Click a named component via template matching.
+    
+    Uses app_memory.click_component directly (template match + auto state verification).
+    No OCR fallback — template match is the primary method.
+    """
     app_name = resolve_app_name(app_name)
 
-    # STEP 0: Observe
-    print(f"  👁 Observing state...")
-    state = observe_state(app_name)
-    print(f"    Frontmost: {state['frontmost']}, Window: {state.get('window')}")
-
-    # Ensure memory ready
+    # Ensure memory ready (learn if needed)
     ensure_app_ready(app_name, required_components=[component])
 
-    # PRE-CLICK: Verify component exists
-    print(f"  🔍 Verifying '{component}' exists...")
-    ok, msg = safe_click(app_name, component)
-    if ok:
-        print(f"  ✅ {msg}")
-    else:
-        # Fallback: use app_memory click (template match)
-        print(f"  ⚠ Direct verify failed ({msg}), trying template match...")
-        out, code = run_script("app_memory.py", [
-            "click", "--app", app_name, "--component", component
-        ], timeout=15)
-        print(out)
-        return code == 0
-
-    # POST-ACTION: Verify
-    new_state = observe_state(app_name)
-    print(f"  📋 After click: {new_state['visible_text'][:5]}")
-    return True
+    # Click via template match (app_memory handles everything:
+    # match → click → state detection → verification → state saving)
+    out, code = run_script("app_memory.py", [
+        "click", "--app", app_name, "--component", component
+    ], timeout=20)
+    print(out)
+    
+    if code != 0:
+        print(f"  ❌ Click failed. Component '{component}' not found or mismatch.")
+    
+    return code == 0
 
 
 def action_open_app(app_name):
