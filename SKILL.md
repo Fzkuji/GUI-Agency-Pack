@@ -21,9 +21,11 @@ OBSERVE → ENSURE APP READY → ACT → VERIFY (auto) → RECORD TRANSITION →
 | **Memory** | `skills/gui-memory/SKILL.md` | Profiles, components, states, transitions |
 | **Workflow** | `skills/gui-workflow/SKILL.md` | State graph navigation, workflow replay |
 | **Setup** | `skills/gui-setup/SKILL.md` | First-time setup on a new machine |
-| **Report** | `skills/gui-report/SKILL.md` | Task cost tracking — start/tick/report |
+| **Report** | `skills/gui-report/SKILL.md` | Task performance tracking — start/tick/report |
 
 ## Core Commands
+
+**exec timeout**: Always use `timeout=60` for GUI commands. Commands return immediately when done; the timeout only caps maximum wait.
 
 ```bash
 source ~/gui-actor-env/bin/activate
@@ -83,14 +85,13 @@ After the full workflow completes:
 
 ### STEP 6: REPORT
 
-Use `gui-report` skill's tracker for full cost reporting:
+Use `gui-report` skill's tracker:
 
 1. **Task start**: `session_status` → `tracker.py start --task "..." --tokens-in X --tokens-out Y --cache-hits Z`
 2. **During task**: `tracker.py tick screenshots/clicks/learns/detects/image_calls` after each operation
-3. **Task end**: `session_status` → `tracker.py report --tokens-in X --tokens-out Y --cache-hits Z --model opus`
+3. **Task end**: `session_status` → `tracker.py report --tokens-in X --tokens-out Y --cache-hits Z`
 
-The tracker outputs duration, token deltas, estimated cost, and operation counts.
-Use `tracker.py history` to review cumulative costs across tasks.
+Outputs duration, token deltas, and operation counts. Use `tracker.py history` to review past tasks.
 
 ---
 
@@ -116,7 +117,7 @@ Use `tracker.py history` to review cumulative costs across tasks.
 5. **Never send screenshots to chat** — internal detection only
 6. **NEVER quit the communication app** — if a dialog asks to quit apps (like CleanMyMac's "Quit All"), NEVER quit Discord/Telegram/WhatsApp or whatever channel you're communicating through. Instead: click "Ignore" to skip. Quitting the comms app disconnects you from the user.
 7. **Watch for new dialogs/windows** — clicking a button may spawn a new dialog or window. After clicking, check if a new window appeared and handle it before continuing.
-7. **Every click uses `click_and_record` or `click_component`** — never raw `click_at()`. Every click must record a state transition.
+8. **Every click uses `click_and_record` or `click_component`** — never raw `click_at()`. Every click must record a state transition.
 
 ## Input Methods (platform_input.py)
 

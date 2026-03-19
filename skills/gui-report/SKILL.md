@@ -1,6 +1,6 @@
 ---
 name: gui-report
-description: "Track and report performance of GUI agent tasks. Use at the START and END of every gui-agent workflow to measure duration, token consumption, and operation counts. Also use to view historical task data."
+description: "Track and report GUI agent task performance — duration, token usage, operation counts. Call at START and END of every gui-agent workflow. Also view historical task data."
 ---
 
 # GUI Task Report
@@ -32,7 +32,7 @@ $TRACKER tick clicks -n 3    # batch increment
 # 3. Optional notes
 $TRACKER note "Clicked Ignore on quit dialog to protect Discord"
 
-# 4. Final report (get final tokens from session_status)
+# 4. Final report (get final tokens from session_status, tracker computes deltas)
 $TRACKER report --tokens-in 50 --tokens-out 2500 --cache-hits 55000
 
 # 5. View history
