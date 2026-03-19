@@ -84,10 +84,15 @@ Detect all components (YOLO + OCR), identify them, filter, save to memory. Priva
 
 Execute clicks, typing, sending. Pre-verify before every click. Pre-verify contact before every message send.
 
-### STEP 4: POST-ACTION VERIFY
-→ Details: `skills/gui-act/SKILL.md`
+### STEP 4: POST-ACTION VERIFY (automatic)
 
-Screenshot after every action. Did the expected change happen? If not → re-observe.
+`click_component` now auto-verifies by detecting which components appeared/disappeared:
+- **First time clicking X**: saves resulting state as `click:X` (learned expectation)
+- **Subsequent clicks on X**: verifies expected components appeared (no screenshot/LLM needed)
+- **Mismatch or failure**: agent should screenshot + analyze only then
+
+The agent reads the `📋 Components:` output to understand current state and decide next action.
+No need to screenshot + call `image` tool for routine verification.
 
 ### STEP 5: SAVE WORKFLOW
 → Details: `skills/gui-workflow/SKILL.md`

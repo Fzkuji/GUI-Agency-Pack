@@ -1173,20 +1173,84 @@ def match_on_fullscreen(app_name, component_name, threshold=0.8):
     return True, logical_x, logical_y, round(max_val, 4)
 
 
+def _detect_visible_components(app_name, screen_img=None):
+    """Quick scan: which saved components are currently visible on screen.
+    
+    Uses template matching only (fast, no image/LLM calls).
+    Crops to window area for speed.
+    
+    Args:
+        app_name: App name
+        screen_img: Pre-loaded full screen image (optional, avoids re-capture)
+    
+    Returns: set of component names that matched on screen.
+    """
+    profile = load_profile(app_name)
+    visible = set()
+    
+    import cv2
+    if screen_img is None:
+        import subprocess
+        subprocess.run(["screencapture", "-x", "/tmp/_detect_vis.png"],
+                       capture_output=True, timeout=5)
+        screen_img = cv2.imread("/tmp/_detect_vis.png")
+    
+    if screen_img is None:
+        return visible
+    
+    # Crop to window area for faster matching
+    bounds = get_window_bounds(app_name)
+    if bounds:
+        wx, wy, ww, wh = bounds
+        # Convert to physical pixels (2x retina) with padding
+        pad = 20  # pixels padding
+        x1 = max(0, (wx - pad) * 2)
+        y1 = max(0, (wy - pad) * 2)
+        x2 = min(screen_img.shape[1], (wx + ww + pad) * 2)
+        y2 = min(screen_img.shape[0], (wy + wh + pad) * 2)
+        search_area = screen_img[y1:y2, x1:x2]
+    else:
+        search_area = screen_img
+    
+    app_dir = get_app_dir(app_name)
+    for comp_name, comp_data in profile.get("components", {}).items():
+        if not comp_data.get("icon_file"):
+            continue
+        tpl_path = app_dir / comp_data["icon_file"]
+        if not tpl_path.exists():
+            continue
+        template = cv2.imread(str(tpl_path))
+        if template is None:
+            continue
+        # Skip if template is larger than search area
+        if template.shape[0] > search_area.shape[0] or template.shape[1] > search_area.shape[1]:
+            continue
+        try:
+            result = cv2.matchTemplate(search_area, template, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, _ = cv2.minMaxLoc(result)
+            if max_val >= 0.8:
+                visible.add(comp_name)
+        except Exception:
+            continue
+    
+    return visible
+
+
 def click_component(app_name, component_name, verify=True):
     """Find a component by template match on FULL SCREEN and click it.
 
-    Full protocol: screenshot before → match → click → screenshot after → verify.
-    No window position needed. Match directly on screen → click.
+    Full protocol:
+    1. Detect visible components (template match, no LLM)
+    2. Check if expected post-click state exists (from previous clicks)
+    3. Click
+    4. Detect visible components again
+    5. If expected state exists → verify by component matching (no screenshot needed)
+       If no expected state → save new state for future verification
+    6. Return result + visible components (agent decides next step)
 
     Returns: (success, message)
-        Also saves before/after screenshots to /tmp/ for debugging.
     """
-    from platform_input import click_at, verify_frontmost, activate_app as pi_activate, screenshot
-
-    # PRE-CLICK: screenshot
-    before_path = screenshot("/tmp/gui_before_click.png")
-    print(f"  📸 Pre-click screenshot saved")
+    from platform_input import click_at, verify_frontmost, activate_app as pi_activate
 
     # 0. System component? Use fixed position relative to window
     if component_name.startswith("sys_") and component_name in MACOS_SYSTEM_COMPONENTS:
@@ -1198,12 +1262,16 @@ def click_component(app_name, component_name, verify=True):
         screen_y = win_y + sys_comp["rel_y"]
         print(f"  🎯 System component '{component_name}' → screen({screen_x},{screen_y})")
         click_at(screen_x, screen_y)
-        time.sleep(0.5)
-        screenshot("/tmp/gui_after_click.png")
-        print(f"  📸 Post-click screenshot saved")
         return True, f"Clicked system component {component_name}"
 
-    # 1. Match on full screen
+    # 1. PRE-CLICK: screenshot once, reuse for match + detection
+    import subprocess, cv2
+    subprocess.run(["screencapture", "-x", "/tmp/_click_screen.png"],
+                   capture_output=True, timeout=5)
+    before_screen = cv2.imread("/tmp/_click_screen.png")
+    before_visible = _detect_visible_components(app_name, screen_img=before_screen)
+
+    # 2. Match target on full screen
     found, screen_x, screen_y, conf = match_on_fullscreen(app_name, component_name)
 
     if not found:
@@ -1211,38 +1279,94 @@ def click_component(app_name, component_name, verify=True):
 
     print(f"  🎯 Found '{component_name}' → screen({screen_x},{screen_y}) conf={conf}")
 
-    # 2. Verify confidence
+    # 3. Verify confidence
     if verify and conf < 0.7:
         return False, f"Low confidence ({conf}), not clicking"
 
-    # 3. Click
+    # 4. Check if we have an expected state for this click
+    state_name = f"click:{component_name}"
+    profile = load_profile(app_name)
+    expected_state = profile.get("states", {}).get(state_name)
+
+    # 5. Click
     click_at(screen_x, screen_y)
-
-    # POST-CLICK: screenshot + verify
     time.sleep(0.5)
-    after_path = screenshot("/tmp/gui_after_click.png")
-    print(f"  📸 Post-click screenshot saved")
 
-    # 4. Verify we're still in the right app
+    # 6. Verify we're still in the right app
     is_correct, actual_app = verify_frontmost(app_name)
     if not is_correct:
         print(f"  ⚠️ APP SWITCHED! Expected '{app_name}', now in '{actual_app}'")
-        print(f"  ⚠️ Click may have opened another app. Re-activating {app_name}...")
         pi_activate(app_name)
         time.sleep(0.5)
         return False, f"Click caused app switch to '{actual_app}', re-activated {app_name}"
 
-    # 5. Verify screen actually changed (basic check)
-    import cv2
-    before_img = cv2.imread(before_path)
-    after_img = cv2.imread(after_path)
-    if before_img is not None and after_img is not None:
-        diff = cv2.absdiff(before_img, after_img)
-        change_pct = (diff > 20).sum() / diff.size * 100
-        if change_pct < 0.1:
-            print(f"  ⚠️ Screen barely changed ({change_pct:.2f}%) — click may not have worked")
+    # 7. POST-CLICK: detect visible components again
+    time.sleep(0.3)
+    after_visible = _detect_visible_components(app_name)
+
+    # Calculate what changed
+    appeared = after_visible - before_visible
+    disappeared = before_visible - after_visible
+
+    if appeared:
+        print(f"  ✅ New components appeared: {', '.join(sorted(appeared))}")
+    if disappeared:
+        print(f"  📤 Components disappeared: {', '.join(sorted(disappeared))}")
+    if not appeared and not disappeared:
+        print(f"  ⚠️ No component changes detected after click")
+
+    # 8. State verification / learning
+    if expected_state:
+        # VERIFY: check if expected components appeared
+        expected_visible = set(expected_state.get("visible", []))
+        expected_appeared = set(expected_state.get("appeared", []))
+        
+        if expected_appeared:
+            matched = expected_appeared & appeared
+            match_ratio = len(matched) / len(expected_appeared) if expected_appeared else 0
+            if match_ratio >= 0.5:
+                print(f"  ✅ State verified: {len(matched)}/{len(expected_appeared)} expected components appeared ({match_ratio:.0%})")
+            else:
+                print(f"  ⚠️ State mismatch: only {len(matched)}/{len(expected_appeared)} expected components ({match_ratio:.0%})")
+                print(f"    Expected: {', '.join(sorted(expected_appeared))}")
+                print(f"    Got: {', '.join(sorted(appeared)) if appeared else '(none)'}")
         else:
-            print(f"  ✅ Screen changed ({change_pct:.1f}%)")
+            # Legacy state without 'appeared' field — just check visible
+            overlap = len(after_visible & expected_visible)
+            ratio = overlap / len(expected_visible) if expected_visible else 0
+            if ratio >= 0.5:
+                print(f"  ✅ State verified: {overlap}/{len(expected_visible)} expected components visible ({ratio:.0%})")
+            else:
+                print(f"  ⚠️ State mismatch: {overlap}/{len(expected_visible)} visible ({ratio:.0%})")
+    else:
+        # LEARN: save this click's resulting state for future verification
+        save_state(
+            app_name, state_name,
+            visible_texts=list(after_visible),
+            trigger=component_name,
+            trigger_pos=[screen_x, screen_y],
+            disappeared=list(disappeared),
+        )
+        # Also save the 'appeared' set for precise verification
+        profile = load_profile(app_name)
+        if state_name in profile.get("states", {}):
+            profile["states"][state_name]["appeared"] = list(appeared)
+            save_profile(app_name, profile)
+        
+        if appeared:
+            print(f"  💾 Saved state '{state_name}': {len(appeared)} new components as verification targets")
+        else:
+            print(f"  💾 Saved state '{state_name}' (no new components detected)")
+
+    # 9. Report current state for agent decision-making
+    print(f"  📊 Currently visible: {len(after_visible)} components")
+    if after_visible:
+        # Print a compact summary — agent uses this to decide next action
+        summary = sorted(after_visible)[:15]  # Top 15 to avoid spam
+        if len(after_visible) > 15:
+            print(f"  📋 Components: {', '.join(summary)} ... (+{len(after_visible)-15} more)")
+        else:
+            print(f"  📋 Components: {', '.join(summary)}")
 
     return True, f"Clicked '{component_name}' at ({screen_x},{screen_y}) conf={conf}"
 
