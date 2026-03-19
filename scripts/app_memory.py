@@ -1379,6 +1379,71 @@ def _detect_visible_components(app_name, screen_img=None):
     return visible
 
 
+def click_and_record(app_name, label, x, y):
+    """Click at (x, y) and record state transition.
+    
+    Use this for ANY click — whether coordinates came from template matching,
+    YOLO detection, or OCR. Ensures every click builds the state graph.
+    
+    Args:
+        app_name: App name
+        label: What was clicked (component name, OCR text, etc.)
+        x, y: Logical screen coordinates
+    
+    Returns: (success, message, after_visible_components)
+    """
+    from platform_input import click_at, verify_frontmost, activate_app as pi_activate
+
+    # Pre-click: detect visible components
+    import subprocess as _sp
+    import cv2 as _cv2
+    _sp.run(["screencapture", "-x", "/tmp/_click_rec.png"],
+            capture_output=True, timeout=5)
+    before_screen = _cv2.imread("/tmp/_click_rec.png")
+    before_visible = _detect_visible_components(app_name, screen_img=before_screen)
+    from_state, _ = identify_state_by_components(app_name, before_visible)
+
+    # Click
+    click_at(x, y)
+    time.sleep(0.5)
+
+    # Verify app
+    is_correct, actual_app = verify_frontmost(app_name)
+    if not is_correct:
+        pi_activate(app_name)
+        time.sleep(0.5)
+        return False, f"App switched to '{actual_app}'", set()
+
+    # Post-click: detect
+    time.sleep(0.3)
+    after_visible = _detect_visible_components(app_name)
+    appeared = after_visible - before_visible
+    disappeared = before_visible - after_visible
+
+    if appeared:
+        print(f"  ✅ Appeared: {', '.join(sorted(appeared)[:5])}")
+    if disappeared:
+        print(f"  📤 Disappeared: {', '.join(sorted(disappeared)[:5])}")
+
+    # Save state + record transition
+    to_state_name = f"click:{label}"
+    save_state(app_name, to_state_name, list(after_visible),
+               trigger=label, trigger_pos=[x, y], disappeared=list(disappeared))
+    # Save appeared
+    p = load_profile(app_name)
+    if to_state_name in p.get("states", {}):
+        p["states"][to_state_name]["appeared"] = list(appeared)
+        save_profile(app_name, p)
+
+    if from_state and (appeared or disappeared) and from_state != to_state_name:
+        record_transition(app_name, from_state, label, to_state_name)
+        print(f"  🔗 {from_state} --{label}--> {to_state_name}")
+
+    print(f"  📊 State: {to_state_name} | {len(after_visible)} components")
+
+    return True, f"Clicked '{label}' at ({x},{y})", after_visible
+
+
 def click_component(app_name, component_name, verify=True):
     """Find a component by template match on FULL SCREEN and click it.
 
@@ -1628,6 +1693,12 @@ def main():
     p_path.add_argument("--component", required=True, help="from_state")
     p_path.add_argument("--contact", required=True, help="to_state")
 
+    p_click_record = sub.add_parser("click_at", help="Click at coordinates and record state transition")
+    p_click_record.add_argument("--app", required=True)
+    p_click_record.add_argument("--label", required=True, help="What was clicked (for state naming)")
+    p_click_record.add_argument("--x", type=int, required=True)
+    p_click_record.add_argument("--y", type=int, required=True)
+
     args = parser.parse_args()
 
     if args.command == "learn":
@@ -1795,6 +1866,11 @@ def main():
             print(f"Path from '{from_s}' to '{to_s}':")
             for click, next_state in path:
                 print(f"  → click '{click}' → {next_state}")
+
+
+    elif args.command == "click_at":
+        ok, msg, _ = click_and_record(args.app, args.label, args.x, args.y)
+        print(f"{'✅' if ok else '❌'} {msg}")
 
 
 if __name__ == "__main__":

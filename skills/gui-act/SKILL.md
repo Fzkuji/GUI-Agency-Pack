@@ -41,14 +41,22 @@ ok, msg = click_component(app_name, component_name)
 
 For elements without saved templates (menus, search results, chat messages):
 
-```python
-import ui_detector
-elements = ui_detector.detect_all(fullscreen=True, include_ax=False)
-# Find target by label
-for e in elements[0]:
-    if e.get('label') == 'target_text':
-        click_at(e['cx'], e['cy'])  # OCR coords are logical
+```bash
+# Step 1: Detect with YOLO+OCR
+# Step 2: Find target coordinates
+# Step 3: Click AND record state transition:
+python3 scripts/app_memory.py click_at --app AppName --label "button_text" --x 977 --y 653
 ```
+
+Or in Python:
+```python
+from app_memory import click_and_record
+ok, msg, visible = click_and_record(app_name, "button_text", x, y)
+```
+
+**CRITICAL: Never use raw `click_at()` from platform_input directly.**
+Always use `click_and_record()` or `click_component()` so the state graph gets updated.
+Every click must build the graph — otherwise the agent learns nothing from its actions.
 
 OCR returns logical coordinates. YOLO returns physical (÷2 for logical).
 
