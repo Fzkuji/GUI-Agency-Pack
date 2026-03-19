@@ -1385,6 +1385,9 @@ def click_and_record(app_name, label, x, y):
     Use this for ANY click — whether coordinates came from template matching,
     YOLO detection, or OCR. Ensures every click builds the state graph.
     
+    Uses both template matching (saved components) AND OCR text to detect
+    state changes. This way it works even before the app has been learned.
+    
     Args:
         app_name: App name
         label: What was clicked (component name, OCR text, etc.)
@@ -1394,14 +1397,26 @@ def click_and_record(app_name, label, x, y):
     """
     from platform_input import click_at, verify_frontmost, activate_app as pi_activate
 
-    # Pre-click: detect visible components
+    # Pre-click: detect visible components + OCR text
     import subprocess as _sp
     import cv2 as _cv2
     _sp.run(["screencapture", "-x", "/tmp/_click_rec.png"],
             capture_output=True, timeout=5)
     before_screen = _cv2.imread("/tmp/_click_rec.png")
     before_visible = _detect_visible_components(app_name, screen_img=before_screen)
-    from_state, _ = identify_state_by_components(app_name, before_visible)
+    
+    # Also get OCR text for state identification (works without saved templates)
+    import ui_detector
+    before_texts = set()
+    try:
+        text_elems = ui_detector.detect_text("/tmp/_click_rec.png", return_logical=True)
+        before_texts = set(e.get("label", "") for e in text_elems if e.get("label"))
+    except Exception:
+        pass
+    
+    # Combine for state identification
+    before_all = before_visible | before_texts
+    from_state, _ = identify_state_by_components(app_name, before_all)
 
     # Click
     click_at(x, y)
@@ -1416,30 +1431,53 @@ def click_and_record(app_name, label, x, y):
 
     # Post-click: detect
     time.sleep(0.3)
-    after_visible = _detect_visible_components(app_name)
-    appeared = after_visible - before_visible
-    disappeared = before_visible - after_visible
+    _sp.run(["screencapture", "-x", "/tmp/_click_rec2.png"],
+            capture_output=True, timeout=5)
+    after_screen = _cv2.imread("/tmp/_click_rec2.png")
+    after_visible = _detect_visible_components(app_name, screen_img=after_screen)
+    
+    after_texts = set()
+    try:
+        text_elems2 = ui_detector.detect_text("/tmp/_click_rec2.png", return_logical=True)
+        after_texts = set(e.get("label", "") for e in text_elems2 if e.get("label"))
+    except Exception:
+        pass
+    
+    after_all = after_visible | after_texts
+    
+    # Calculate changes (use combined sets)
+    appeared = after_all - before_all
+    disappeared = before_all - after_all
 
     if appeared:
-        print(f"  ✅ Appeared: {', '.join(sorted(appeared)[:5])}")
+        top = sorted(appeared)[:5]
+        print(f"  ✅ Appeared: {', '.join(top)}")
     if disappeared:
-        print(f"  📤 Disappeared: {', '.join(sorted(disappeared)[:5])}")
+        top = sorted(disappeared)[:5]
+        print(f"  📤 Disappeared: {', '.join(top)}")
+    
+    changed = bool(appeared or disappeared)
 
     # Save state + record transition
     to_state_name = f"click:{label}"
-    save_state(app_name, to_state_name, list(after_visible),
+    save_state(app_name, to_state_name, list(after_all),
                trigger=label, trigger_pos=[x, y], disappeared=list(disappeared))
-    # Save appeared
     p = load_profile(app_name)
     if to_state_name in p.get("states", {}):
         p["states"][to_state_name]["appeared"] = list(appeared)
         save_profile(app_name, p)
 
-    if from_state and (appeared or disappeared) and from_state != to_state_name:
+    if from_state and changed and from_state != to_state_name:
         record_transition(app_name, from_state, label, to_state_name)
         print(f"  🔗 {from_state} --{label}--> {to_state_name}")
+    elif not from_state and changed:
+        # Unknown from state — create one from before data
+        from_state_name = "unknown_before"
+        save_state(app_name, from_state_name, list(before_all))
+        record_transition(app_name, from_state_name, label, to_state_name)
+        print(f"  🔗 (new) {from_state_name} --{label}--> {to_state_name}")
 
-    print(f"  📊 State: {to_state_name} | {len(after_visible)} components")
+    print(f"  📊 State: {to_state_name} | {len(after_all)} items ({len(after_visible)} components + {len(after_texts)} texts)")
 
     return True, f"Clicked '{label}' at ({x},{y})", after_visible
 
