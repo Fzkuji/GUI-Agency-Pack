@@ -21,6 +21,7 @@ OBSERVE → ENSURE APP READY → ACT → VERIFY (auto) → RECORD TRANSITION →
 | **Memory** | `skills/gui-memory/SKILL.md` | Profiles, components, states, transitions |
 | **Workflow** | `skills/gui-workflow/SKILL.md` | State graph navigation, workflow replay |
 | **Setup** | `skills/gui-setup/SKILL.md` | First-time setup on a new machine |
+| **Report** | `skills/gui-report/SKILL.md` | Task cost tracking — start/tick/report |
 
 ## Core Commands
 
@@ -81,9 +82,15 @@ After the full workflow completes:
 - **Failure** → `discard_transitions(app)` — graph stays clean
 
 ### STEP 6: REPORT
-```
-⏱ 45.2s | 📊 +10k tokens | 🔧 3 clicks, 1 learn
-```
+
+Use `gui-report` skill's tracker for full cost reporting:
+
+1. **Task start**: `session_status` → `tracker.py start --task "..." --tokens-in X --tokens-out Y --cache-hits Z`
+2. **During task**: `tracker.py tick screenshots/clicks/learns/detects/image_calls` after each operation
+3. **Task end**: `session_status` → `tracker.py report --tokens-in X --tokens-out Y --cache-hits Z --model opus`
+
+The tracker outputs duration, token deltas, estimated cost, and operation counts.
+Use `tracker.py history` to review cumulative costs across tasks.
 
 ---
 
