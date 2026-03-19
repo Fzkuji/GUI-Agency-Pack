@@ -7,76 +7,87 @@ description: "State graph navigation, workflow recording and replay."
 
 ## Core Concept
 
-Every click records a **state transition**: `(from_state, click_component, to_state)`.
-Multiple clicks build a **state graph**. A workflow is a **path through the graph**.
+Every click records a **pending** state transition: `(from_state, click_component, to_state)`.
+Pending transitions are **NOT saved to profile** until the workflow succeeds.
 
 ```
-click:chat_tab --宋文涛--> click:宋文涛 --my_avatar--> click:my_avatar
-click:chat_tab --contacts_tab--> click:contacts_tab
-click:contacts_tab --chat_tab--> click:chat_tab
-click:moments --chat_tab--> click:chat_tab
+EXPLORING (trial & error) → pending transitions accumulate
+  ↓ workflow succeeds
+CONFIRM → transitions saved to profile permanently
+  ↓ workflow fails
+DISCARD → pending transitions thrown away
+```
+
+## Workflow Lifecycle
+
+### 1. First Time (Exploring)
+
+The agent doesn't know the path. Every click is trial and error:
+
+```python
+# Each click records a PENDING transition
+click_and_record(app, "Scan", x, y)      # pending: unknown → click:Scan
+click_and_record(app, "Run", x, y)        # pending: click:Scan → click:Run
+click_and_record(app, "Quit_All", x, y)   # pending: click:Run → click:Quit_All
+
+# Workflow succeeded! Commit all transitions
+confirm_transitions(app)                   # → saved to profile.json
+
+# OR workflow failed — discard everything
+discard_transitions(app)                   # → nothing saved, graph stays clean
+```
+
+### 2. Save Workflow
+
+Only after the FULL workflow succeeds end-to-end:
+
+```python
+save_workflow(app, "smart_cleanup", target_state="click:cleanup_done",
+             description="Smart Scan → Run → handle Quit dialog → done")
+```
+
+### 3. Replay (Known Path)
+
+```python
+run_workflow(app, "smart_cleanup")
+# Detects current state → find_path to target → execute clicks
+# All clicks are already known, auto-verified, no screenshots needed
+```
+
+## CLI Commands
+
+```bash
+# View committed transitions
+python3 scripts/app_memory.py transitions --app "CleanMyMac X"
+
+# View pending (uncommitted) transitions
+python3 scripts/app_memory.py pending --app "CleanMyMac X"
+
+# Commit after success
+python3 scripts/app_memory.py commit --app "CleanMyMac X"
+
+# Discard after failure
+python3 scripts/app_memory.py discard --app "CleanMyMac X"
+
+# Find path between states
+python3 scripts/app_memory.py path --app "CleanMyMac X" --component from_state --contact to_state
 ```
 
 ## Navigation
 
-To reach a target state from any starting state:
-
 ```python
 from app_memory import find_path, identify_state_by_components, _detect_visible_components
 
-# 1. Detect current state
 visible = _detect_visible_components(app_name)
 current, f1 = identify_state_by_components(app_name, visible)
-
-# 2. Find path to target
 path = find_path(app_name, current, target_state)
-# Returns: [("component_to_click", "next_state"), ...]
-
-# 3. Execute each step
 for click, next_state in path:
-    click_component(app_name, click)  # Auto-verifies + records transition
+    click_component(app_name, click)
 ```
 
-## Viewing the Graph
+## Rules
 
-```bash
-python3 scripts/app_memory.py transitions --app WeChat
-# Output:
-#   click:chat_tab --宋文涛--> click:宋文涛 (×3)
-#   click:moments --chat_tab--> click:chat_tab (×1)
-
-python3 scripts/app_memory.py path --app WeChat --component click:moments --contact click:宋文涛
-# Output:
-#   → click 'chat_tab' → click:chat_tab
-#   → click '宋文涛' → click:宋文涛
-```
-
-## Building the Graph
-
-The graph grows automatically with every `click_component` call. To explore faster:
-1. Learn the app: `agent.py learn --app AppName`
-2. Click through major pages/tabs (each click adds edges)
-3. The more you explore, the more paths are available
-
-## First-Time Task (No Graph Yet)
-
-1. Screenshot + `image` tool to understand current state
-2. Learn the app to get component names
-3. Click step by step, using `image` tool to verify each step
-4. Each click automatically builds the graph
-5. Next time the same task → graph already has the path
-
-## Intent Matching
-
-When you receive a GUI task:
-1. Identify target app + target state
-2. Check if graph has a path from current state to target
-3. If yes → follow the path (no screenshots needed for known transitions)
-4. If no → explore manually (screenshot + image tool), building the graph as you go
-
-## Cross-App Workflows
-
-For tasks spanning multiple apps (copy from WeChat → paste in Chrome):
-1. Execute steps in each app sequentially
-2. Each app has its own state graph
-3. Use clipboard/text for data passing between apps
+1. **Never save transitions from failed/aborted workflows** — use `discard_transitions()`
+2. **Only `confirm_transitions()` after full end-to-end success**
+3. **First time exploring = trial and error** — expect mistakes, don't persist them
+4. **Workflow = target state** — the path is computed at runtime from the graph

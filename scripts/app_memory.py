@@ -460,31 +460,80 @@ def identify_state_by_components(app_name, visible_components):
     return best_state, best_f1
 
 
+# Pending transitions — not yet confirmed. Only committed after workflow success.
+_pending_transitions = {}  # app_name -> [(from, click, to), ...]
+_pending_states = {}       # app_name -> {state_name: state_data, ...}
+
+
 def record_transition(app_name, from_state, click_component, to_state):
-    """Record a state transition: from_state --click--> to_state.
+    """Record a PENDING state transition: from_state --click--> to_state.
     
-    If this transition already exists, increment its count.
+    Transitions are NOT immediately saved to profile. They accumulate in
+    _pending_transitions and are only committed when confirm_transitions()
+    is called (after a workflow succeeds).
+    
+    This prevents trial-and-error clicks from polluting the state graph.
     """
+    if app_name not in _pending_transitions:
+        _pending_transitions[app_name] = []
+    _pending_transitions[app_name].append((from_state, click_component, to_state))
+    print(f"  📝 Pending transition: {from_state} --{click_component}--> {to_state}")
+
+
+def confirm_transitions(app_name):
+    """Commit all pending transitions to profile. Call after workflow succeeds.
+    
+    Returns: number of transitions committed.
+    """
+    pending = _pending_transitions.pop(app_name, [])
+    pending_st = _pending_states.pop(app_name, {})
+    
+    if not pending and not pending_st:
+        return 0
+    
     profile = load_profile(app_name)
     if "transitions" not in profile:
         profile["transitions"] = []
     
-    # Check if transition already exists
-    for t in profile["transitions"]:
-        if (t["from"] == from_state and t["click"] == click_component 
-            and t["to"] == to_state):
-            t["count"] = t.get("count", 1) + 1
-            save_profile(app_name, profile)
-            return
+    committed = 0
+    for from_s, click, to_s in pending:
+        # Check if exists
+        found = False
+        for t in profile["transitions"]:
+            if t["from"] == from_s and t["click"] == click and t["to"] == to_s:
+                t["count"] = t.get("count", 1) + 1
+                found = True
+                break
+        if not found:
+            profile["transitions"].append({
+                "from": from_s, "click": click, "to": to_s, "count": 1,
+            })
+        committed += 1
     
-    # New transition
-    profile["transitions"].append({
-        "from": from_state,
-        "click": click_component,
-        "to": to_state,
-        "count": 1,
-    })
+    # Also commit pending states
+    if "states" not in profile:
+        profile["states"] = {}
+    for state_name, state_data in pending_st.items():
+        profile["states"][state_name] = state_data
+    
     save_profile(app_name, profile)
+    if committed:
+        print(f"  ✅ Committed {committed} transitions + {len(pending_st)} states to {app_name}")
+    return committed
+
+
+def discard_transitions(app_name):
+    """Discard all pending transitions (workflow failed/aborted)."""
+    n = len(_pending_transitions.pop(app_name, []))
+    _pending_states.pop(app_name, {})
+    if n:
+        print(f"  🗑️ Discarded {n} pending transitions for {app_name}")
+    return n
+
+
+def get_pending_transitions(app_name):
+    """Get pending (uncommitted) transitions."""
+    return _pending_transitions.get(app_name, [])
 
 
 def find_path(app_name, from_state, to_state):
@@ -1458,24 +1507,27 @@ def click_and_record(app_name, label, x, y):
     
     changed = bool(appeared or disappeared)
 
-    # Save state + record transition
+    # Pending state + transition (NOT saved to profile yet — wait for confirm)
     to_state_name = f"click:{label}"
-    save_state(app_name, to_state_name, list(after_all),
-               trigger=label, trigger_pos=[x, y], disappeared=list(disappeared))
-    p = load_profile(app_name)
-    if to_state_name in p.get("states", {}):
-        p["states"][to_state_name]["appeared"] = list(appeared)
-        save_profile(app_name, p)
+    state_data = {
+        "visible": list(after_all),
+        "trigger": label,
+        "trigger_pos": [x, y],
+        "disappeared": list(disappeared),
+        "appeared": list(appeared),
+    }
+    if app_name not in _pending_states:
+        _pending_states[app_name] = {}
+    _pending_states[app_name][to_state_name] = state_data
 
     if from_state and changed and from_state != to_state_name:
         record_transition(app_name, from_state, label, to_state_name)
-        print(f"  🔗 {from_state} --{label}--> {to_state_name}")
     elif not from_state and changed:
-        # Unknown from state — create one from before data
         from_state_name = "unknown_before"
-        save_state(app_name, from_state_name, list(before_all))
+        if app_name not in _pending_states:
+            _pending_states[app_name] = {}
+        _pending_states[app_name][from_state_name] = {"visible": list(before_all)}
         record_transition(app_name, from_state_name, label, to_state_name)
-        print(f"  🔗 (new) {from_state_name} --{label}--> {to_state_name}")
 
     print(f"  📊 State: {to_state_name} | {len(after_all)} items ({len(after_visible)} components + {len(after_texts)} texts)")
 
@@ -1565,18 +1617,17 @@ def click_component(app_name, component_name, verify=True):
 
     # 8. State verification / learning / updating
     def _save_click_state():
-        """Save or update state data for this click."""
-        save_state(
-            app_name, state_name,
-            visible_texts=list(after_visible),
-            trigger=component_name,
-            trigger_pos=[screen_x, screen_y],
-            disappeared=list(disappeared),
-        )
-        profile_tmp = load_profile(app_name)
-        if state_name in profile_tmp.get("states", {}):
-            profile_tmp["states"][state_name]["appeared"] = list(appeared)
-            save_profile(app_name, profile_tmp)
+        """Buffer state data as pending (not written to profile yet)."""
+        state_data = {
+            "visible": list(after_visible),
+            "trigger": component_name,
+            "trigger_pos": [screen_x, screen_y],
+            "disappeared": list(disappeared),
+            "appeared": list(appeared),
+        }
+        if app_name not in _pending_states:
+            _pending_states[app_name] = {}
+        _pending_states[app_name][state_name] = state_data
 
     if expected_state:
         # VERIFY: check expected components
@@ -1736,6 +1787,15 @@ def main():
     p_click_record.add_argument("--label", required=True, help="What was clicked (for state naming)")
     p_click_record.add_argument("--x", type=int, required=True)
     p_click_record.add_argument("--y", type=int, required=True)
+
+    p_commit = sub.add_parser("commit", help="Commit pending transitions (after workflow success)")
+    p_commit.add_argument("--app", required=True)
+
+    p_discard = sub.add_parser("discard", help="Discard pending transitions (workflow failed)")
+    p_discard.add_argument("--app", required=True)
+
+    p_pending = sub.add_parser("pending", help="Show pending (uncommitted) transitions")
+    p_pending.add_argument("--app", required=True)
 
     args = parser.parse_args()
 
@@ -1909,6 +1969,23 @@ def main():
     elif args.command == "click_at":
         ok, msg, _ = click_and_record(args.app, args.label, args.x, args.y)
         print(f"{'✅' if ok else '❌'} {msg}")
+
+    elif args.command == "commit":
+        n = confirm_transitions(args.app)
+        print(f"Committed {n} transitions for {args.app}")
+
+    elif args.command == "discard":
+        n = discard_transitions(args.app)
+        print(f"Discarded {n} pending transitions for {args.app}")
+
+    elif args.command == "pending":
+        pending = get_pending_transitions(args.app)
+        if not pending:
+            print("No pending transitions.")
+        else:
+            print(f"Pending transitions for {args.app}:")
+            for f, c, t in pending:
+                print(f"  {f} --{c}--> {t}")
 
 
 if __name__ == "__main__":

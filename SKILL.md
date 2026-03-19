@@ -66,15 +66,21 @@ Component not matching ≠ lower threshold. It means the component isn't on scre
 7. Report: appeared/disappeared components, current state
 
 ### STEP 3: VERIFY (automatic)
-- **First click on X**: learns what appears/disappears → saves as `click:X` state
-- **Repeat click on X**: verifies expected components appeared (no screenshot needed)
+- **Known state**: verifies expected components appeared (no screenshot needed)
 - **Mismatch**: agent should then screenshot + `image` tool to diagnose
 
-### STEP 4: STATE TRANSITION (automatic)
-Every click records `(from_state, click_component, to_state)` in the state graph.
-Multiple clicks build a connected graph. Use `find_path()` to navigate between any two states.
+### STEP 4: STATE TRANSITION (pending)
+Every click records a **pending** transition. Pending = NOT saved yet.
+- **Workflow succeeds** → `confirm_transitions(app)` → saved permanently
+- **Workflow fails/aborts** → `discard_transitions(app)` → thrown away
+- This prevents trial-and-error clicks from polluting the state graph
 
-### STEP 5: REPORT
+### STEP 5: COMMIT OR DISCARD
+After the full workflow completes:
+- **Success** → `confirm_transitions(app)` + `save_workflow(app, name, target_state)`
+- **Failure** → `discard_transitions(app)` — graph stays clean
+
+### STEP 6: REPORT
 ```
 ⏱ 45.2s | 📊 +10k tokens | 🔧 3 clicks, 1 learn
 ```

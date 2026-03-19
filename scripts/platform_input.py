@@ -22,13 +22,17 @@ SYSTEM = platform.system()  # "Darwin", "Windows", "Linux"
 # ═══════════════════════════════════════════
 
 def mouse_click(x, y, button="left", clicks=1):
-    """Click at screen coordinates (logical pixels, integers)."""
+    """Click at screen coordinates (logical pixels, integers).
+    After clicking, moves cursor to corner so it doesn't pollute screenshots."""
     from pynput.mouse import Button, Controller
     mouse = Controller()
     mouse.position = (int(x), int(y))
     time.sleep(0.05)
     btn = Button.right if button == "right" else Button.left
     mouse.click(btn, int(clicks))
+    time.sleep(0.1)
+    # Move cursor to bottom-right corner to avoid polluting screenshots/template matching
+    mouse.position = (1500, 970)
 
 
 def mouse_move(x, y):
