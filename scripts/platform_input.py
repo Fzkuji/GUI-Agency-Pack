@@ -52,6 +52,51 @@ def mouse_right_click(x, y):
     mouse_click(x, y, button="right")
 
 
+def mouse_drag(start_x, start_y, end_x, end_y, duration=0.5, button="left"):
+    """Drag from (start_x, start_y) to (end_x, end_y).
+    
+    Moves to start → press → smooth move to end → release.
+    After drag, moves cursor to corner to avoid polluting screenshots.
+    
+    Args:
+        start_x, start_y: Starting coordinates
+        end_x, end_y: Ending coordinates  
+        duration: Total drag duration in seconds (default 0.5)
+        button: "left" or "right" (default "left")
+    """
+    from pynput.mouse import Button, Controller
+    mouse = Controller()
+    btn = Button.right if button == "right" else Button.left
+    
+    # Move to start position
+    mouse.position = (int(start_x), int(start_y))
+    time.sleep(0.1)
+    
+    # Press button
+    mouse.press(btn)
+    time.sleep(0.05)
+    
+    # Smooth move to end position
+    steps = max(20, int(duration * 60))
+    for i in range(1, steps + 1):
+        progress = i / steps
+        x = start_x + (end_x - start_x) * progress
+        y = start_y + (end_y - start_y) * progress
+        mouse.position = (int(x), int(y))
+        time.sleep(duration / steps)
+    
+    # Ensure we're at the exact end position
+    mouse.position = (int(end_x), int(end_y))
+    time.sleep(0.05)
+    
+    # Release button
+    mouse.release(btn)
+    time.sleep(0.1)
+    
+    # Move cursor to corner
+    mouse.position = (1500, 970)
+
+
 # ═══════════════════════════════════════════
 # Keyboard operations (pynput)
 # ═══════════════════════════════════════════

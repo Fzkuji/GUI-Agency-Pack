@@ -1,1 +1,3 @@
 
+{"task": "CleanMyMac cleanup #5", "timestamp": "2026-03-20 05:38:42", "duration_s": 258.7, "context_start": 120000, "context_end": 124000, "context_delta": 4000, "operations": {"screenshots": 8, "clicks": 4, "learns": 0, "detects": 0, "image_calls": 3}, "notes": []}
+{"task": "WeChat\u2192Chrome search", "timestamp": "2026-03-20 09:16:39", "duration_s": 389.8, "context_start": 125000, "context_end": 138000, "context_delta": 13000, "operations": {"screenshots": 6, "clicks": 3, "learns": 1, "detects": 0, "image_calls": 7}, "notes": []}
