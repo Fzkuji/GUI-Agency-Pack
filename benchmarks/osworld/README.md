@@ -61,12 +61,12 @@ GUIClaw runs on the following stack:
 
 | Metric | Value |
 |--------|-------|
-| Tasks tested | 20 / 46 |
-| Tasks passed | **20** |
+| Tasks tested | 21 / 46 |
+| Tasks passed | **21** |
 | Tasks failed | 0 |
-| **Pass rate** | **100%** (20/20) |
+| **Pass rate** | **100%** (21/21) |
 
-> **All 20 tasks completed successfully** (17 feasible + 3 infeasible). Zero failures.
+> **All 21 tasks completed successfully** (18 feasible + 3 infeasible). Zero failures.
 
 ### Detailed Results
 
@@ -92,6 +92,7 @@ GUIClaw runs on the following stack:
 | 17 | `030eeff7` | Enable Do Not Track | 1.0 | ✅ | Settings → Cookies → toggle DNT → Confirm |
 | 18 | `9656a811` | Enable Safe Browsing | 1.0 | ✅ | Settings → Security → select "Standard protection" |
 | 19 | `fc6d8143` | Find JFK→ORD flights on Delta | 1.0 | ✅ | 2nd attempt (1st blocked by cookie consent). CDP JS dismiss → pyautogui form fill |
+| 20 | `a96b564e` | Find discussion with most replies on FlightAware | 1.0 | ✅ | Footer → Community → Discussion → Top → All time → sort by Replies → "The Banter Thread" |
 
 
 
@@ -107,9 +108,9 @@ Reference scores from the [OSWorld leaderboard](https://os-world.github.io/) (Ch
 |------|-------|--------|---------|------|
 | 1 | HIPPO Agent w/Opus 4.5 (Lenovo) | 60.4% (25.96/43) | 74.5% | Agentic framework |
 | 2 | Claude Sonnet 4.6 (Anthropic) | 78.5% (32.96/42) | 72.1% | General model |
-| — | **GUIClaw** | **100%** (20/20 tested) | TBD | OpenClaw + Claude Opus 4.6 |
+| — | **GUIClaw** | **100%** (21/21 tested) | TBD | OpenClaw + Claude Opus 4.6 |
 
-> ⚠️ GUIClaw's score is on a partial Chrome subset (20/46 tasks). Full benchmark in progress. Not directly comparable to full-set results yet, but early numbers are promising.
+> ⚠️ GUIClaw's score is on a partial Chrome subset (21/46 tasks). Full benchmark in progress.
 
 ## Environment Details
 
