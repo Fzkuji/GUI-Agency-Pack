@@ -107,6 +107,7 @@ Outputs duration, context delta, and operation counts. Use `tracker.py history` 
 5. **First time: screenshot + image. Repeat: detection only** — saves tokens on known workflows.
 6. **Paste > Type** for CJK text
 7. **Integer logical coordinates** — pynput uses screen logical pixels
+8. **ALWAYS save to memory** — every GUI operation must save detection results, learned components, and state information to `memory/apps/<appname>/`. This is the core of the system. Even for one-off tasks or benchmarks (e.g., OSWorld), save what you learn about each app. Memory is local (gitignored) but essential for future operations on the same app.
 
 ## Safety Rules
 
