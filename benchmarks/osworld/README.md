@@ -64,7 +64,7 @@ The workflow for OSWorld: VM screenshot is downloaded to Mac via HTTP API → GP
 | 16 | `3299584d` | Remove funbrain.com startup page | 1.0 | ✅ PASS | chrome://settings/onStartup → select "Open the New Tab page" |
 | 17 | `030eeff7` | Enable Do Not Track | 1.0 | ✅ PASS | chrome://settings/cookies → toggle DNT → Confirm |
 | 18 | `9656a811` | Enable Safe Browsing | 1.0 | ✅ PASS | chrome://settings/security → select "Standard protection" |
-| 19 | `fc6d8143` | Find JFK→ORD flights for tomorrow on Delta | 1.0 | ✅ PASS | delta.com → fill From/To/Date → Search → results page verified |
+| 19 | `fc6d8143` | Find JFK→ORD flights for tomorrow on Delta | 1.0 | ✅ PASS | 2nd attempt. 1st blocked by cookie consent dialog (pyautogui clicks intercepted). Fixed by CDP JS dismiss → then pyautogui filled From/To/Date → Search |
 
 ### Infeasible Tasks (Correctly Identified)
 
