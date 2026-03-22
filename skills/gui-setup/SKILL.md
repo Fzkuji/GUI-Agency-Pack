@@ -15,6 +15,22 @@ Installs: cliclick, Python 3.12, PyTorch, ultralytics, OpenCV, GPA-GUI-Detector 
 
 **Accessibility permissions required**: System Settings → Privacy & Security → Accessibility → Add Terminal / OpenClaw
 
+## OpenClaw Configuration
+
+Add to `~/.openclaw/openclaw.json` (or use `openclaw config`):
+
+```json
+{
+  "tools": {
+    "exec": {
+      "timeoutSec": 60
+    }
+  }
+}
+```
+
+**Why**: GUIClaw operations (screenshot → detect → click → wait) often take 15-30 seconds. The default exec timeout is too short and will kill commands mid-execution with SIGTERM.
+
 ## Scripts
 
 | Script | Purpose |
