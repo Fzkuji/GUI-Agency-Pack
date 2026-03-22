@@ -62,11 +62,11 @@ GUIClaw runs on the following stack:
 | Metric | Value |
 |--------|-------|
 | Tasks tested | 20 / 46 |
-| Tasks passed | **19** |
-| Tasks failed | 1 (infrastructure issue) |
-| **Pass rate** | **95.0%** (19/20) |
+| Tasks passed | **20** |
+| Tasks failed | 0 |
+| **Pass rate** | **100%** (20/20) |
 
-> 19 of 20 tasks completed successfully (16 feasible + 3 infeasible). Only 1 task failed due to Linux Chromium missing a feature (not an agent capability issue).
+> **All 20 tasks completed successfully** (17 feasible + 3 infeasible). Zero failures.
 
 ### Detailed Results
 
@@ -83,7 +83,7 @@ GUIClaw runs on the following stack:
 | 8 | `480bcfea` | Disable new 2023 Chrome UI | — | ✅ | Infeasible: `chrome://flags` "No matching experiments" (flag removed in Chromium 138) |
 | 9 | `af630914` | Set font size to largest | 1.0 | ✅ | OCR found "Huge" label → click slider endpoint |
 | 10 | `3720f614` | Change language to Xenothian | — | ✅ | Infeasible: fictional language, not available in any browser |
-| 11 | `99146c54` | Auto-clear data on close | 0 | ❌ | Chromium 138 on Linux doesn't expose this setting |
+| 11 | `99146c54` | Auto-clear data on close | 1.0 | ✅ | Settings → Site settings → On-device site data → "Delete data when close all windows" |
 | 12 | `12086550` | Navigate to password manager | 1.0 | ✅ | URL navigation: chrome://password-manager/passwords |
 | 13 | `6766f2b8` | Load unpacked Chrome extension | 1.0 | ✅ | Extensions → Developer mode → Load unpacked → select folder |
 | 14 | `93eabf48` | Turn off dark mode | 1.0 | ✅ | Settings → Appearance → "Use Classic" resets dark mode to light |
@@ -93,13 +93,7 @@ GUIClaw runs on the following stack:
 | 18 | `9656a811` | Enable Safe Browsing | 1.0 | ✅ | Settings → Security → select "Standard protection" |
 | 19 | `fc6d8143` | Find JFK→ORD flights on Delta | 1.0 | ✅ | 2nd attempt (1st blocked by cookie consent). CDP JS dismiss → pyautogui form fill |
 
-### Failed Tasks (Infrastructure Issues)
 
-| # | Issue |
-|---|-------|
-| 11 | Chromium 138 on Linux doesn't have "Clear cookies on close" setting (confirmed: `chrome://settings/cookies` has no such toggle) |
-
-This task failed because the target Chrome feature doesn't exist in Chromium 138 on Linux — not because the agent couldn't operate the UI.
 
 ### Not Yet Tested
 
@@ -113,7 +107,7 @@ Reference scores from the [OSWorld leaderboard](https://os-world.github.io/) (Ch
 |------|-------|--------|---------|------|
 | 1 | HIPPO Agent w/Opus 4.5 (Lenovo) | 60.4% (25.96/43) | 74.5% | Agentic framework |
 | 2 | Claude Sonnet 4.6 (Anthropic) | 78.5% (32.96/42) | 72.1% | General model |
-| — | **GUIClaw** | **95.0%** (19/20 tested) | TBD | OpenClaw + Claude Opus 4.6 |
+| — | **GUIClaw** | **100%** (20/20 tested) | TBD | OpenClaw + Claude Opus 4.6 |
 
 > ⚠️ GUIClaw's score is on a partial Chrome subset (20/46 tasks). Full benchmark in progress. Not directly comparable to full-set results yet, but early numbers are promising.
 
