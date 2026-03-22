@@ -33,14 +33,14 @@ The workflow for OSWorld: VM screenshot is downloaded to Mac via HTTP API → GP
 
 | Metric | Value |
 |--------|-------|
-| Tasks tested | 15 |
-| Tasks passed (score = 1.0) | 11 |
-| Pass rate (tested) | **73.3%** |
-| GUI operation success rate | **100%** (11/11) |
+| Tasks tested | 16 |
+| Tasks passed (score = 1.0) | 12 |
+| Pass rate (tested) | **75.0%** |
+| GUI operation success rate | **100%** (12/12) |
 | Failures due to infra/eval issues | 4 |
-| Adjusted pass rate (excl. infra issues) | **100%** (11/11) |
+| Adjusted pass rate (excl. infra issues) | **100%** (12/12) |
 
-> **Note:** Of 15 tasks tested, 4 failed due to infrastructure/environment issues (missing Chrome features on Linux, network proxy interference) that prevented even attempting the GUI operations. All 11 tasks where GUI operations were actually performed passed with score 1.0.
+> **Note:** Of 16 tasks tested, 4 failed due to infrastructure/environment issues (missing Chrome features on Linux, network proxy interference) that prevented even attempting the GUI operations. All 11 tasks where GUI operations were actually performed passed with score 1.0.
 
 ### Detailed Results
 
@@ -57,6 +57,7 @@ The workflow for OSWorld: VM screenshot is downloaded to Mac via HTTP API → GP
 | 6 | `7a5a7856` | Save webpage to bookmarks bar | 1.0 | ✅ PASS | Ctrl+D → changed folder to "Bookmarks bar" → Done |
 | 12 | `12086550` | Navigate to password manager | 1.0 | ✅ PASS | Direct URL navigation: chrome://password-manager/passwords |
 | 13 | `6766f2b8` | Load unpacked Chrome extension | 1.0 | ✅ PASS | chrome://extensions → Developer mode → Load unpacked → select folder |
+| 16 | `3299584d` | Remove funbrain.com startup page | 1.0 | ✅ PASS | chrome://settings/onStartup → select "Open the New Tab page" |
 
 ### Failed Due to Infrastructure/Environment Issues
 
@@ -69,7 +70,7 @@ The workflow for OSWorld: VM screenshot is downloaded to Mac via HTTP API → GP
 
 ### Not Yet Tested
 
-- Tasks 8, 10, 15, 16: Local Chrome settings tasks
+- Tasks 8, 10, 15: Infeasible tasks (not yet handled)
 - Tasks 19–45: External website tasks (flights, shopping, etc.)
 
 ## Methodology
@@ -142,9 +143,9 @@ Reference scores from the [OSWorld leaderboard](https://os-world.github.io/):
 | Human | 72.36% | — | Manual |
 | Claude Computer Use | 14.90% | — | Claude 3.5 Sonnet + screenshots |
 | GPT-4V + SoM | 6.27% | — | GPT-4V + Set-of-Mark |
-| **GUIClaw** | **TBD** | **73.3%** (tested) | GPA-GUI-Detector + OCR + LLM |
+| **GUIClaw** | **TBD** | **75.0%** (tested) | GPA-GUI-Detector + OCR + LLM |
 
-> ⚠️ GUIClaw's Chrome score is on a partial subset (15/46 tasks). Full benchmark evaluation in progress. All 11 tasks that were not blocked by infrastructure issues passed successfully (100% adjusted pass rate).
+> ⚠️ GUIClaw's Chrome score is on a partial subset (16/46 tasks). Full benchmark evaluation in progress. All 12 tasks that were not blocked by infrastructure issues passed successfully (100% adjusted pass rate).
 
 ## Files
 
