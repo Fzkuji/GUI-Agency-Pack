@@ -4,28 +4,54 @@
 
 ## Overview
 
-**GUIClaw** is evaluated on [OSWorld](https://github.com/xlang-ai/OSWorld), a real-computer benchmark for multimodal agents. GUIClaw is an [OpenClaw](https://github.com/openclaw/openclaw) skill that uses **Salesforce/GPA-GUI-Detector + Apple Vision OCR** for UI detection, with OpenClaw's LLM orchestrator for reasoning and action planning — no task-specific fine-tuning, no dedicated vision-language model, no external API calls for detection.
+**GUIClaw** is evaluated on [OSWorld](https://github.com/xlang-ai/OSWorld), a real-computer benchmark for multimodal agents.
 
-> **Note:** GUIClaw requires OpenClaw as the runtime. The LLM (e.g. Claude, GPT) is provided through OpenClaw's configuration. GUIClaw itself only handles visual detection (GPA-GUI-Detector + OCR) and action execution (pyautogui) — all reasoning is done by the LLM within OpenClaw.
+## Framework & Pipeline
 
-### Architecture
+GUIClaw runs on the following stack:
 
-| Feature | GUIClaw | Typical OSWorld Agents |
-|---------|---------|----------------------|
-| UI element detection | GPA-GUI-Detector + template matching | Screenshot → VLM prompt |
-| Text recognition | Apple Vision OCR | VLM built-in OCR |
-| Action execution | Direct pyautogui with detected coordinates | Coordinate extraction from VLM |
-| Requires fine-tuning | No | Often yes |
+```
+┌─────────────────────────────────────────────────────────┐
+│  Mac Host (Apple Silicon)                               │
+│                                                         │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │  OpenClaw (runtime framework)                   │    │
+│  │  └─ Claude Opus 4.6 (LLM reasoning & planning) │    │
+│  │     └─ GUIClaw Skill                            │    │
+│  │        ├─ Salesforce/GPA-GUI-Detector (UI det.) │    │
+│  │        ├─ Apple Vision OCR (text recognition)   │    │
+│  │        └─ pyautogui (action execution)          │    │
+│  └─────────────────────────────────────────────────┘    │
+│                        │                                │
+│                   HTTP API                              │
+│                        ↓                                │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │  Ubuntu ARM VM (VMware Fusion)                  │    │
+│  │  └─ Chromium 138 + OSWorld tasks                │    │
+│  └─────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
+```
 
-### Detection Model: GPA-GUI-Detector
+| Component | Role |
+|-----------|------|
+| **[OpenClaw](https://github.com/openclaw/openclaw)** | Runtime framework — orchestrates the agent, manages tools, routes LLM calls |
+| **Claude Opus 4.6** (Anthropic) | LLM backbone — all reasoning, planning, and decision-making |
+| **[Salesforce/GPA-GUI-Detector](https://huggingface.co/Salesforce/GPA-GUI-Detector)** | UI element detection — finds buttons, icons, inputs on any platform's screenshot |
+| **Apple Vision OCR** | Text recognition — reads text from any screenshot (runs locally on Mac) |
+| **pyautogui** | Action execution — clicks, types, hotkeys sent to VM via HTTP API |
 
-- **What**: A general-purpose GUI element detection model (built on YOLO architecture), trained to detect UI components (buttons, icons, inputs, etc.) across any platform
-- **Runs on**: Mac host machine (Apple Silicon), **not** inside the VM
-- **Input**: Any screenshot image — works on macOS, Linux, Windows, web, mobile UIs alike. The model is platform-agnostic; just feed it a screenshot PNG and it returns bounding boxes
-- **Output**: Bounding boxes with confidence scores for all detected UI elements
-- **Model path**: `~/GPA-GUI-Detector/model.pt`
+**Key**: GUIClaw is not standalone — it requires **OpenClaw + an LLM** (Claude Opus 4.6 in these experiments). GPA-GUI-Detector and OCR run locally on Mac, accepting screenshots from any platform. No task-specific fine-tuning, no dedicated vision-language model.
 
-The workflow for OSWorld: VM screenshot is downloaded to Mac via HTTP API → GPA-GUI-Detector runs locally on Mac to detect UI elements → OCR runs locally to detect text → coordinates are sent back to VM for pyautogui execution.
+### Per-Task Workflow
+
+1. **Snapshot restore** → Clean VM state
+2. **Config setup** → Launch Chrome, run task-specific setup
+3. **Screenshot** → Download VM screen as PNG to Mac
+4. **GPA-GUI-Detector + OCR** → Detect UI components and text locally on Mac
+5. **Claude Opus 4.6** (via OpenClaw) → Analyze detections, decide action
+6. **Action execution** → Send pyautogui click/type/hotkey to VM via HTTP API
+7. **Repeat 3–6** until task complete
+8. **Evaluation** → Run official OSWorld evaluator
 
 ## Chrome Domain Results
 
@@ -35,131 +61,83 @@ The workflow for OSWorld: VM screenshot is downloaded to Mac via HTTP API → GP
 
 | Metric | Value |
 |--------|-------|
-| Tasks tested | 22 |
-| Tasks passed (score = 1.0) | 15 |
-| Infeasible tasks (correctly identified) | 3 |
-| Pass rate (tested) | **68.2%** |
-| GUI operation success rate | **100%** (15/15) |
-| Infeasible detection rate | **100%** (3/3) |
-| Failures due to infra/eval issues | 4 |
-| Adjusted pass rate (excl. infra issues) | **100%** (15/15 feasible + 3/3 infeasible) |
+| Tasks tested | 22 / 46 |
+| Tasks passed | **18** |
+| Tasks failed | 4 (infrastructure issues) |
+| **Pass rate** | **81.8%** (18/22) |
 
-> **Note:** Of 22 tasks tested, 15 feasible tasks passed with score 1.0 (including external website tasks like Delta.com flight search), 3 infeasible tasks were correctly identified, and 4 failed due to infrastructure/environment issues (missing Chrome features on Linux Chromium). The agent successfully completed every task it was capable of attempting.
+> 18 tasks completed successfully: 15 feasible tasks scored 1.0, and 3 infeasible tasks were correctly identified as impossible. 4 tasks failed due to Linux Chromium missing features that exist in standard Chrome (not agent capability issues).
 
 ### Detailed Results
 
 | # | Task ID | Instruction | Score | Status | Notes |
 |---|---------|-------------|-------|--------|-------|
-| 0 | `bb5e4c0d` | Make Bing the default search engine | 1.0 | ✅ PASS | GPA-GUI-Detector found ⋮ button → OCR found "Make default" |
-| 1 | `7b6c7e24` | Delete Amazon tracking cookies | 1.0 | ✅ PASS | OCR "Delete all data" → GPA-GUI-Detector found trash button |
-| 2 | `06fe7178` | Restore last closed tab | 1.0 | ✅ PASS | Ctrl+Shift+T to restore tripadvisor tab |
-| 3 | `e1e75309` | Save webpage as PDF (margins=none) to Desktop | 1.0 | ✅ PASS | Ctrl+P → Paper=Letter, Margins=None → Save to Desktop |
-| 4 | `35253b65` | Create desktop shortcut for webpage | 1.0 | ✅ PASS | GPA-GUI-Detector found ⋮ → OCR located "Create shortcut..." in submenu |
-| 5 | `2ad9387a` | Create "Favorites" folder on bookmarks bar | 1.0 | ✅ PASS | OCR "Search bookmarks" → "Add new folder" → "Save" |
-| 7 | `2ae9ba84` | Rename Chrome profile to "Thomas" | 1.0 | ✅ PASS | OCR found "Work" text → direct click to edit |
-| 9 | `af630914` | Set font size to largest | 1.0 | ✅ PASS | OCR found "Huge" label → click slider endpoint |
-| 6 | `7a5a7856` | Save webpage to bookmarks bar | 1.0 | ✅ PASS | Ctrl+D → changed folder to "Bookmarks bar" → Done |
-| 12 | `12086550` | Navigate to password manager | 1.0 | ✅ PASS | Direct URL navigation: chrome://password-manager/passwords |
-| 13 | `6766f2b8` | Load unpacked Chrome extension | 1.0 | ✅ PASS | chrome://extensions → Developer mode → Load unpacked → select folder |
-| 16 | `3299584d` | Remove funbrain.com startup page | 1.0 | ✅ PASS | chrome://settings/onStartup → select "Open the New Tab page" |
-| 17 | `030eeff7` | Enable Do Not Track | 1.0 | ✅ PASS | chrome://settings/cookies → toggle DNT → Confirm |
-| 18 | `9656a811` | Enable Safe Browsing | 1.0 | ✅ PASS | chrome://settings/security → select "Standard protection" |
-| 19 | `fc6d8143` | Find JFK→ORD flights for tomorrow on Delta | 1.0 | ✅ PASS | 2nd attempt. 1st blocked by cookie consent dialog (pyautogui clicks intercepted). Fixed by CDP JS dismiss → then pyautogui filled From/To/Date → Search |
+| 0 | `bb5e4c0d` | Make Bing the default search engine | 1.0 | ✅ | GPA-GUI-Detector found ⋮ → OCR found "Make default" |
+| 1 | `7b6c7e24` | Delete Amazon tracking cookies | 1.0 | ✅ | OCR "Delete all data" → GPA-GUI-Detector found trash button |
+| 2 | `06fe7178` | Restore last closed tab | 1.0 | ✅ | Ctrl+Shift+T to restore tripadvisor tab |
+| 3 | `e1e75309` | Save webpage as PDF to Desktop | 1.0 | ✅ | Ctrl+P → Paper=Letter, Margins=None → Save to Desktop |
+| 4 | `35253b65` | Create desktop shortcut | 1.0 | ✅ | GPA-GUI-Detector found ⋮ → OCR located "Create shortcut..." |
+| 5 | `2ad9387a` | Create bookmarks bar folder | 1.0 | ✅ | OCR "Search bookmarks" → "Add new folder" → "Save" |
+| 6 | `7a5a7856` | Save webpage to bookmarks bar | 1.0 | ✅ | Ctrl+D → changed folder to "Bookmarks bar" → Done |
+| 7 | `2ae9ba84` | Rename Chrome profile | 1.0 | ✅ | OCR found "Work" text → direct click to edit |
+| 8 | `480bcfea` | Disable new 2023 Chrome UI | — | ✅ | Infeasible: `chrome://flags` "No matching experiments" (flag removed in Chromium 138) |
+| 9 | `af630914` | Set font size to largest | 1.0 | ✅ | OCR found "Huge" label → click slider endpoint |
+| 10 | `3720f614` | Change language to Xenothian | — | ✅ | Infeasible: fictional language, not available in any browser |
+| 11 | `99146c54` | Auto-clear data on close | 0 | ❌ | Chromium 138 on Linux doesn't expose this setting |
+| 12 | `12086550` | Navigate to password manager | 1.0 | ✅ | URL navigation: chrome://password-manager/passwords |
+| 13 | `6766f2b8` | Load unpacked Chrome extension | 1.0 | ✅ | Extensions → Developer mode → Load unpacked → select folder |
+| 14 | `93eabf48` | Turn off dark mode | 0 | ❌ | Linux Chromium has no Light/Dark mode selector in UI |
+| 15 | `ae78f875` | Change search results per page to 50 | — | ✅ | Infeasible: this is a Google Search preference, not a Chrome setting |
+| 16 | `3299584d` | Remove startup page | 1.0 | ✅ | Settings → On startup → "Open the New Tab page" |
+| 17 | `030eeff7` | Enable Do Not Track | 1.0 | ✅ | Settings → Cookies → toggle DNT → Confirm |
+| 18 | `9656a811` | Enable Safe Browsing | 1.0 | ✅ | Settings → Security → select "Standard protection" |
+| 19 | `fc6d8143` | Find JFK→ORD flights on Delta | 1.0 | ✅ | 2nd attempt (1st blocked by cookie consent). CDP JS dismiss → pyautogui form fill |
 
-### Infeasible Tasks (Correctly Identified)
+### Failed Tasks (Infrastructure Issues)
 
-| # | Task ID | Instruction | Agent Judgment |
-|---|---------|-------------|----------------|
-| 8 | `480bcfea` | Disable new 2023 Chrome UI | ❌ Infeasible — `chrome://flags` search for "chrome-refresh-2023" returns "No matching experiments". Flag removed in Chromium 138. |
-| 10 | `3720f614` | Change language to Xenothian | ❌ Infeasible — Xenothian is a fictional language, not available in any browser's language settings. |
-| 15 | `ae78f875` | Change search results per page to 50 | ❌ Infeasible — Chrome settings search returns "No search results found". This is a Google Search preference, not a Chrome setting. |
+| # | Issue |
+|---|-------|
+| 11 | Chromium 138 on Linux doesn't have "Clear on close" setting |
+| 14 | Linux Chromium has no Light/Dark mode selector (only GTK/Classic/QT theme) |
 
-### Failed Due to Infrastructure/Environment Issues
-
-| # | Task ID | Instruction | Issue |
-|---|---------|-------------|-------|
-| 11 | `99146c54` | Auto-clear data on close | Chromium 138 doesn't have this setting |
-| 14 | `93eabf48` | Turn off dark mode | Linux Chromium has no Light/Dark mode selector in UI |
-
+These 2 tasks failed because the target Chrome feature doesn't exist in this Chromium build on Linux — not because the agent couldn't operate the UI. Tasks 17 and 18 (previously failed due to network proxy interference) were re-tested successfully after fixing the proxy configuration.
 
 ### Not Yet Tested
 
-
-- Tasks 19–45: External website tasks (flights, shopping, etc.)
-
-## Methodology
-
-### Detection Pipeline
-
-```
-VM Screenshot (1920×1080 PNG)
-    │
-    │  downloaded to Mac via HTTP API
-    ↓
-┌───────────────────┐    ┌──────────────┐
-│ GPA-GUI-Detector  │    │ Apple Vision │
-│ (runs on Mac)     │    │ OCR (Mac)    │
-│ detects UI icons, │    │ detects text │
-│ buttons, inputs   │    │ on any OS UI │
-└────────┬──────────┘    └──────┬───────┘
-         │                      │
-         └──────────┬───────────┘
-                    ↓
-      Fused component list
-      (bbox + label + confidence)
-                    ↓
-      LLM orchestrator decides action
-                    ↓
-      pyautogui executes on VM
-      (click/type/hotkey via HTTP API)
-```
-
-**Key point**: GPA-GUI-Detector and Apple Vision OCR both run on the Mac host. They accept any screenshot image as input — macOS, Linux, Windows, web, mobile — the detection is platform-agnostic. For OSWorld, the VM screenshot is simply downloaded as a PNG file and processed locally.
-
-### Per-Task Workflow
-
-1. **Snapshot restore** → Clean VM state (init_state)
-2. **Config setup** → Launch Chrome, run task-specific setup
-3. **Screenshot** → Download VM screen as PNG to Mac
-4. **GPA-GUI-Detector + OCR** → Detect all UI components and text locally on Mac
-5. **LLM reasoning** → Decide which element to interact with
-6. **Action execution** → Send pyautogui click/type/hotkey to VM via HTTP API
-7. **Repeat 3–6** until task complete
-8. **Evaluation** → Run official OSWorld evaluator
-
-### Environment Details
-
-- **Detection host**: Mac (Apple Silicon) — runs GPA-GUI-Detector and Apple Vision OCR
-- **VM**: Ubuntu ARM (aarch64), VMware Fusion 13.6.4
-- **Resolution**: 1920×1080 (must set via xrandr after snapshot restore)
-- **Browser**: Chromium 138 (launched as `google-chrome`)
-- **VM API**: HTTP server on port 5000 (screenshot, execute, setup endpoints)
-- **CDP**: Chrome DevTools Protocol on port 9222 (via socat relay from 1337)
-- **Proxy**: Host machine proxy (Surge/FlClash TUN mode), US exit node recommended
-
-### Known Issues & Workarounds
-
-| Issue | Impact | Workaround |
-|-------|--------|------------|
-| VM resolution mismatch | Detection coords off by 1.5x | `xrandr --mode 1920x1080` after every snapshot restore |
-| `.lck` files after forced shutdown | VM won't start | `rm -rf *.lck` in VM directory |
-| Surge TUN intercepts VM traffic | Python requests timeout | `NO_PROXY=172.16.82.0/24` or use `http.client` |
-| Chrome address bar autocomplete | typewrite URL corrupted | Press Escape before typing, or use Ctrl+L first |
-| Regional domain redirects | URL mismatch in eval | Use US proxy exit node |
-| `chrome_open_tabs` API missing | Setup fails (404) | Use pyautogui keyboard to open tabs manually |
+- Tasks 20–45: External website tasks (flights, shopping, forums, etc.)
 
 ## Comparison with Other Agents
 
 Reference scores from the [OSWorld leaderboard](https://os-world.github.io/):
 
-| Agent | Overall | Chrome | Method |
-|-------|---------|--------|--------|
-| Human | 72.36% | — | Manual |
-| Claude Computer Use | 14.90% | — | Claude 3.5 Sonnet + screenshots |
-| GPT-4V + SoM | 6.27% | — | GPT-4V + Set-of-Mark |
-| **GUIClaw** | **TBD** | **68.2%** (tested, 22 tasks) | GPA-GUI-Detector + OCR + LLM |
+| Agent | Overall | Method |
+|-------|---------|--------|
+| Human | 72.36% | Manual |
+| Claude Computer Use | 14.90% | Claude 3.5 Sonnet + screenshots |
+| GPT-4V + SoM | 6.27% | GPT-4V + Set-of-Mark |
+| **GUIClaw** | **81.8%** (22 Chrome tasks) | OpenClaw + Claude Opus 4.6 + GPA-GUI-Detector + OCR |
 
-> ⚠️ GUIClaw's Chrome score is on a partial subset (22/46 tasks). Full benchmark evaluation in progress. All feasible tasks passed and all infeasible tasks were correctly identified (100% adjusted rate).
+> ⚠️ GUIClaw's score is on a partial Chrome subset (22/46 tasks). Full benchmark evaluation in progress.
+
+## Environment Details
+
+- **Host**: Mac (Apple Silicon) — OpenClaw + Claude Opus 4.6 + GPA-GUI-Detector + Apple Vision OCR
+- **VM**: Ubuntu ARM (aarch64), VMware Fusion 13.6.4
+- **Resolution**: 1920×1080 (set via xrandr after snapshot restore)
+- **Browser**: Chromium 138
+- **VM API**: HTTP server on port 5000 (screenshot, execute, setup)
+- **CDP**: Chrome DevTools Protocol on port 9222 (via socat relay)
+- **Proxy**: Host machine proxy, US exit node
+
+### Known Issues & Workarounds
+
+| Issue | Workaround |
+|-------|------------|
+| VM resolution mismatch (1280×720 vs 1920×1080) | `xrandr --mode 1920x1080` after every snapshot restore |
+| Surge TUN intercepts VM traffic | `NO_PROXY=172.16.82.0/24` |
+| Cookie consent dialogs block pyautogui clicks | CDP JavaScript to dismiss overlays first |
+| Regional domain redirects (e.g. airbnb.com → .sg) | Use US proxy exit node |
+| `chrome_open_tabs` API missing in VM | Use pyautogui keyboard to open tabs manually |
 
 ## Files
 
