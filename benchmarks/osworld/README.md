@@ -83,7 +83,7 @@ GUIClaw runs on the following stack:
 | 8 | `480bcfea` | Disable new 2023 Chrome UI | — | ✅ | Infeasible: `chrome://flags` "No matching experiments" (flag removed in Chromium 138) |
 | 9 | `af630914` | Set font size to largest | 1.0 | ✅ | OCR found "Huge" label → click slider endpoint |
 | 10 | `3720f614` | Change language to Xenothian | — | ✅ | Infeasible: fictional language, not available in any browser |
-| 11 | `99146c54` | Auto-clear data on close | 1.0 | ✅ | Settings → Site settings → On-device site data → "Delete data when close all windows" |
+| 11 | `99146c54` | Auto-clear data on close | 1.0 | ✅ | 2nd attempt. 1st failed: searched `chrome://settings/cookies`, concluded feature missing. After web search, found at `chrome://settings/content/siteData` (moved in newer Chrome) |
 | 12 | `12086550` | Navigate to password manager | 1.0 | ✅ | URL navigation: chrome://password-manager/passwords |
 | 13 | `6766f2b8` | Load unpacked Chrome extension | 1.0 | ✅ | Extensions → Developer mode → Load unpacked → select folder |
 | 14 | `93eabf48` | Turn off dark mode | 1.0 | ✅ | Settings → Appearance → "Use Classic" resets dark mode to light |
