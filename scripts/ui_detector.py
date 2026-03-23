@@ -350,6 +350,34 @@ def compute_iou(a, b):
     return inter / union if union > 0 else 0
 
 
+def detect_all(img_path, conf=0.1, iou=0.3):
+    """Unified detection on an image file: GPA (required) + OCR (optional).
+
+    Platform-independent: works on any screenshot (local, remote VM, downloaded).
+    GPA-GUI-Detector is the required baseline — always runs.
+    OCR is optional enhancement — gracefully degrades if unavailable.
+
+    Returns: (icons, texts, merged, img_w, img_h)
+        - icons: GPA-GUI-Detector results (always populated)
+        - texts: OCR results (empty list if OCR unavailable)
+        - merged: deduplicated combination of both
+        - img_w, img_h: image dimensions
+    """
+    # GPA-GUI-Detector: REQUIRED — if this fails, we have nothing
+    icons, img_w, img_h = detect_icons(img_path, conf=conf, iou=iou)
+
+    # OCR: OPTIONAL — graceful degradation if unavailable
+    texts = []
+    try:
+        texts = detect_text(img_path)
+    except Exception as ex:
+        # OCR may not be available on non-Mac platforms — that's OK
+        pass
+
+    merged = merge_elements(icons, texts)
+    return icons, texts, merged, img_w, img_h
+
+
 def merge_elements(icon_elements, text_elements, ax_elements=None, iou_threshold=0.3):
     """Merge elements from different sources, dedup by IoU.
 
@@ -449,9 +477,12 @@ def annotate_image(img_path, elements, out_path=None, retina_scale=2):
 # Main detection pipeline
 # ═══════════════════════════════════════════
 
-def detect_all(app_name=None, fullscreen=False, include_ax=False,
-               gpa_conf=0.1, gpa_iou=0.3, merge_iou=0.3):
-    """Run full detection pipeline.
+def detect_all_mac(app_name=None, fullscreen=False, include_ax=False,
+                   gpa_conf=0.1, gpa_iou=0.3, merge_iou=0.3):
+    """Run full detection pipeline on Mac (screenshot + detect).
+
+    Mac-specific: uses screencapture, osascript, AX API.
+    For platform-independent detection on an existing image, use detect_all().
 
     Returns: (elements, img_path, annotated_path)
     """
@@ -519,7 +550,7 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output JSON only")
     args = parser.parse_args()
 
-    elements, img_path, annotated_path = detect_all(
+    elements, img_path, annotated_path = detect_all_mac(
         app_name=args.app,
         fullscreen=args.fullscreen,
         include_ax=not args.no_ax,

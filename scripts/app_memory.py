@@ -1445,31 +1445,40 @@ def record_page_transition(before_img_path, after_img_path, click_label, click_p
     sys.path.insert(0, str(SCRIPT_DIR))
     import ui_detector
 
-    # OCR both screenshots
+    # Detect both screenshots with GPA + OCR (always run both)
     before_texts = set()
     after_texts = set()
+    before_icon_count = 0
+    after_icon_count = 0
 
     try:
-        before_elems = ui_detector.detect_text(before_img_path)
+        before_icons, before_elems, before_merged, _, _ = ui_detector.detect_all(before_img_path)
+        _tracker_auto_tick("detector_calls")
         _tracker_auto_tick("ocr_calls")
         before_texts = set(e.get("label", "").strip() for e in before_elems if e.get("label", "").strip())
+        before_icon_count = len(before_icons)
     except Exception as ex:
-        print(f"  ⚠️ OCR failed on before image: {ex}")
+        print(f"  ⚠️ Detection failed on before image: {ex}")
 
     try:
-        after_elems = ui_detector.detect_text(after_img_path)
+        after_icons, after_elems, after_merged, _, _ = ui_detector.detect_all(after_img_path)
+        _tracker_auto_tick("detector_calls")
         _tracker_auto_tick("ocr_calls")
         after_texts = set(e.get("label", "").strip() for e in after_elems if e.get("label", "").strip())
+        after_icon_count = len(after_icons)
     except Exception as ex:
-        print(f"  ⚠️ OCR failed on after image: {ex}")
+        print(f"  ⚠️ Detection failed on after image: {ex}")
 
     _tracker_auto_tick("transitions")
     _tracker_auto_tick("clicks")
 
-    # Diff
+    # Text diff
     appeared = after_texts - before_texts
     disappeared = before_texts - after_texts
     persisted = before_texts & after_texts
+
+    # Icon diff (count change as a signal)
+    icon_delta = after_icon_count - before_icon_count
 
     if appeared:
         top = sorted(appeared)[:8]
@@ -1477,7 +1486,8 @@ def record_page_transition(before_img_path, after_img_path, click_label, click_p
     if disappeared:
         top = sorted(disappeared)[:8]
         print(f"  📤 Disappeared: {', '.join(top)}")
-    print(f"  📊 {len(persisted)} persisted, {len(appeared)} appeared, {len(disappeared)} disappeared")
+    print(f"  📊 Text: {len(persisted)} persisted, {len(appeared)} appeared, {len(disappeared)} disappeared")
+    print(f"  📊 Icons: {before_icon_count} → {after_icon_count} (delta: {icon_delta:+d})")
 
     # Load profile and save transition
     if domain:
@@ -1900,9 +1910,11 @@ def click_and_record(app_name, label, x, y):
     after_visible = _detect_visible_components(app_name, screen_img=after_screen)
     
     after_texts = set()
+    after_icon_count = 0
     try:
-        text_elems2 = ui_detector.detect_text("/tmp/_click_rec2.png", return_logical=True)
-        after_texts = set(e.get("label", "") for e in text_elems2 if e.get("label"))
+        after_icons, after_text_elems, _, _, _ = ui_detector.detect_all("/tmp/_click_rec2.png")
+        after_texts = set(e.get("label", "") for e in after_text_elems if e.get("label"))
+        after_icon_count = len(after_icons)
     except Exception:
         pass
     
@@ -2000,10 +2012,12 @@ def drag_and_record(app_name, label, x1, y1, x2, y2, duration=0.5):
     after_visible = _detect_visible_components(app_name, screen_img=after_screen)
 
     after_texts = set()
+    after_icon_count = 0
     try:
         import ui_detector
-        text_elems = ui_detector.detect_text("/tmp/_drag_rec2.png", return_logical=True)
-        after_texts = set(e.get("label", "") for e in text_elems if e.get("label"))
+        after_icons, after_text_elems, _, _, _ = ui_detector.detect_all("/tmp/_drag_rec2.png")
+        after_texts = set(e.get("label", "") for e in after_text_elems if e.get("label"))
+        after_icon_count = len(after_icons)
     except Exception:
         pass
 
@@ -2337,8 +2351,8 @@ def verify_before_send(app_name, expected_contact, message):
     if not img_path:
         return False, "Could not capture window"
 
-    # OCR the header area to find contact name
-    text_elements = ui_detector.detect_text(img_path)
+    # Detect with GPA + OCR (always both)
+    _, text_elements, merged, _, _ = ui_detector.detect_all(img_path)
 
     # Look for the expected contact name in the detected text
     for el in text_elements:
@@ -2348,6 +2362,117 @@ def verify_before_send(app_name, expected_contact, message):
     # Not found
     visible_texts = [el.get("label", "") for el in text_elements[:10]]
     return False, f"Contact '{expected_contact}' not found. Visible: {visible_texts[:5]}"
+
+
+def verify_page_state(img_path, before_img_path=None, expected_texts=None, min_icon_change=0):
+    """Verify the current page state after an action.
+
+    Runs GPA (required) + OCR (optional) on the image to assess state.
+    Designed to answer: "did my action have the expected effect?"
+
+    Verification modes (combine as needed):
+    1. DIFF MODE (before_img_path given): Compare before/after
+       - Reports text appeared/disappeared
+       - Reports icon count change (new UI elements appeared?)
+       - Verdict: "changed" or "unchanged"
+    2. EXPECT MODE (expected_texts given): Check specific content exists
+       - Each expected text is checked via substring match in OCR results
+       - Also checks if GPA detected reasonable number of UI elements
+       - Verdict: "found" or "missing: [...]"
+    3. BASELINE MODE (neither given): Just report what's detected
+       - Returns raw detection counts for the LLM to interpret
+
+    Args:
+        img_path: Current screenshot to verify
+        before_img_path: Previous screenshot for diff (optional)
+        expected_texts: List of strings expected on the page (optional)
+        min_icon_change: Minimum icon count change to consider "changed" (default 0)
+
+    Returns: dict with:
+        - verdict: "changed"|"unchanged"|"found"|"missing"|"detected"
+        - icon_count: Number of GPA-detected UI elements
+        - text_count: Number of OCR-detected text elements (0 if OCR unavailable)
+        - texts: List of detected text labels (empty if no OCR)
+        - details: Human-readable summary
+        - diff: (only in DIFF mode) {text_appeared, text_disappeared, icon_delta}
+        - missing: (only in EXPECT mode) List of expected texts not found
+    """
+    sys.path.insert(0, str(SCRIPT_DIR))
+    import ui_detector
+
+    # Always run both detectors (OCR gracefully degrades)
+    icons, texts, merged, img_w, img_h = ui_detector.detect_all(img_path)
+    _tracker_auto_tick("detector_calls")
+    _tracker_auto_tick("ocr_calls")
+
+    text_labels = [e.get("label", "").strip() for e in texts if e.get("label", "").strip()]
+    result = {
+        "icon_count": len(icons),
+        "text_count": len(texts),
+        "merged_count": len(merged),
+        "texts": text_labels,
+    }
+
+    # --- DIFF MODE ---
+    if before_img_path:
+        before_icons, before_texts, _, _, _ = ui_detector.detect_all(before_img_path)
+        _tracker_auto_tick("detector_calls")
+        _tracker_auto_tick("ocr_calls")
+
+        before_text_set = set(e.get("label", "").strip() for e in before_texts if e.get("label", "").strip())
+        after_text_set = set(text_labels)
+
+        text_appeared = after_text_set - before_text_set
+        text_disappeared = before_text_set - after_text_set
+        icon_delta = len(icons) - len(before_icons)
+
+        has_text_change = bool(text_appeared or text_disappeared)
+        has_icon_change = abs(icon_delta) > min_icon_change
+
+        result["diff"] = {
+            "text_appeared": sorted(text_appeared)[:10],
+            "text_disappeared": sorted(text_disappeared)[:10],
+            "icon_delta": icon_delta,
+        }
+
+        if has_text_change or has_icon_change:
+            result["verdict"] = "changed"
+            parts = []
+            if text_appeared:
+                parts.append(f"+{len(text_appeared)} texts")
+            if text_disappeared:
+                parts.append(f"-{len(text_disappeared)} texts")
+            if icon_delta != 0:
+                parts.append(f"icons {icon_delta:+d}")
+            result["details"] = f"Page changed: {', '.join(parts)}"
+        else:
+            result["verdict"] = "unchanged"
+            result["details"] = f"No significant change detected (icons: {len(icons)}, texts: {len(texts)})"
+
+        return result
+
+    # --- EXPECT MODE ---
+    if expected_texts:
+        all_text_lower = " ".join(text_labels).lower()
+        missing = []
+        for expected in expected_texts:
+            if expected.lower() not in all_text_lower:
+                missing.append(expected)
+
+        if missing:
+            result["verdict"] = "missing"
+            result["missing"] = missing
+            result["details"] = f"Missing expected content: {missing}. Found {len(icons)} icons, {len(texts)} texts."
+        else:
+            result["verdict"] = "found"
+            result["details"] = f"All expected content found. {len(icons)} icons, {len(texts)} texts."
+
+        return result
+
+    # --- BASELINE MODE ---
+    result["verdict"] = "detected"
+    result["details"] = f"Detected {len(icons)} icons, {len(texts)} texts, {len(merged)} total elements."
+    return result
 
 
 # ═══════════════════════════════════════════
