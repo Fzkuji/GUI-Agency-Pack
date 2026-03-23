@@ -155,7 +155,7 @@ Each step in the execution flow below has a corresponding sub-skill file. **When
 | **Observe** | `read {baseDir}/skills/gui-observe/SKILL.md` | MUST read before taking any screenshot or detecting state |
 | **Learn** | `read {baseDir}/skills/gui-learn/SKILL.md` | MUST read before learning a new app or re-learning components |
 | **Act + Memory** | `read {baseDir}/skills/gui-act/SKILL.md` | MUST read before any action. Includes detection, matching, execution, AND memory saving as one unified flow |
-| **Memory (reference)** | `read {baseDir}/skills/gui-memory/SKILL.md` | Reference for memory structure (profile.json format, directory layout, browser sites/) |
+| **Memory (reference)** | `read {baseDir}/skills/gui-memory/SKILL.md` | Reference for memory structure (split storage: meta/components/states/transitions, forgetting, browser sites/) |
 | **Workflow** | `read {baseDir}/skills/gui-workflow/SKILL.md` | MUST read before multi-step navigation or state graph operations |
 | **Setup** | `read {baseDir}/skills/gui-setup/SKILL.md` | MUST read before first-time setup on a new machine |
 | **Report** | `read {baseDir}/skills/gui-report/SKILL.md` | MUST read before tracking or reporting task performance |
@@ -217,7 +217,7 @@ Both save functions are automated — no manual cropping or JSON editing:
 - `learn_from_screenshot(img_path, domain, app_name, page_name)` — auto-detects, crops, deduplicates, saves all components
 - `record_page_transition(before_img, after_img, click_label, click_pos, domain)` — auto-diffs OCR, saves states + transition
 
-For memory structure details (profile.json format, directory layout, browser sites/): `read {baseDir}/skills/gui-memory/SKILL.md`
+For memory structure details (split storage format, forgetting mechanism, browser sites/): `read {baseDir}/skills/gui-memory/SKILL.md`
 
 ### STEP 3: REPORT
 → **MUST `read {baseDir}/skills/gui-report/SKILL.md` first**
@@ -292,15 +292,18 @@ gui-agent/
 ├── memory/               # Visual memory (gitignored but ESSENTIAL)
 │   ├── apps/
 │   │   ├── <appname>/
-│   │   │   ├── profile.json       # Components + states + transitions
+│   │   │   ├── meta.json          # Metadata (detect_count, forget_threshold)
+│   │   │   ├── components.json    # Component registry + activity tracking
+│   │   │   ├── states.json        # States defined by component sets
+│   │   │   ├── transitions.json   # State transitions (dict, deduped)
 │   │   │   ├── components/        # Cropped UI element templates
 │   │   │   └── pages/             # Page screenshots
 │   │   └── chromium/              # Browser example
-│   │       ├── profile.json       # Browser-level UI (toolbar, settings)
+│   │       ├── meta.json, components.json, states.json, transitions.json
 │   │       ├── components/
 │   │       ├── pages/
-│   │       └── sites/             # ⭐ Each website = nested app structure
-│   │           ├── united.com/    #   same structure: profile.json + components/ + pages/
+│   │       └── sites/             # ⭐ Each website = same 4-file structure
+│   │           ├── united.com/
 │   │           ├── delta.com/
 │   │           └── ...
 │   └── meta_workflows/
