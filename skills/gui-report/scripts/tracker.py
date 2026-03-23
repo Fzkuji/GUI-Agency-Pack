@@ -135,6 +135,21 @@ def _read_memory_snapshot():
 def start(args):
     session = args.session if hasattr(args, 'session') else None
     task = args.task if hasattr(args, 'task') else None
+
+    # Auto-save previous session if exists (failsafe for missed report)
+    if STATE_FILE.exists():
+        try:
+            with open(STATE_FILE) as f:
+                old_state = json.load(f)
+            # Only save if it had real activity (not just auto-started and abandoned)
+            has_activity = any(old_state.get(c, 0) > 0 for c in COUNTERS)
+            if has_activity:
+                old_tokens = _read_tokens(old_state.get("session_key"))
+                _, log_entry = _build_report(old_state, old_tokens, save=True, cleanup=False)
+                print(f"  💾 Auto-saved previous session: {old_state.get('task', '?')}")
+        except Exception:
+            pass
+
     tokens = _read_tokens(session)
     memory_snapshot = _read_memory_snapshot()
 
