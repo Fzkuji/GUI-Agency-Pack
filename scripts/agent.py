@@ -325,57 +325,6 @@ def ensure_app_ready(app_name, workflow=None, required_components=None):
     return ready
 
 
-def detect_workflow_conflict(app_name, expected_state, actual_state):
-    """Detect if current app state conflicts with expected workflow state.
-
-    Returns: (has_conflict, conflict_description)
-    """
-    # TODO: Implement actual detection logic
-    # This could compare:
-    # - Expected component visible vs actual
-    # - Expected page vs actual page
-    # - Expected button state vs actual
-
-    # For now, return False - conflict detection needs more implementation
-    return False, None
-
-
-def plan_workflow(app_name, context=None, error_info=None):
-    """Analyze app state and components.
-
-    If error_info is provided, analyze why it failed.
-    
-    Returns: (plan, analysis)
-    """
-    reason = "after error" if error_info else "after learn"
-    print(f"  📝 Analyzing {app_name} ({reason})...")
-
-    # Load profile (already learned)
-    app_dir = SKILL_DIR / "memory" / "apps" / app_name.lower().replace(" ", "_")
-    profile_path = app_dir / "profile.json"
-
-    if not profile_path.exists():
-        return None, "No profile found - run learn first"
-
-    with open(profile_path) as f:
-        profile = json.load(f)
-
-    components = profile.get("components", {})
-    states = profile.get("states", {})
-
-    analysis = {
-        "app": app_name,
-        "error": error_info,
-        "components": list(components.keys()),
-        "states": list(states.keys()),
-        "context": context or {}
-    }
-
-    print(f"  📋 Found {len(components)} components, {len(states)} states")
-
-    return None, analysis
-
-
 def resolve_app_name(raw_name):
     """Resolve common app name aliases."""
     aliases = {
@@ -576,12 +525,13 @@ def run_workflow(app_name, workflow_name):
     1. Load workflow → get target_state
     2. Detect current state
     3. find_path(current, target) → click sequence
-    4. Execute each click (auto-verified by click_component)
+    4. Execute each click with pixel-level change verification
 
     Returns: (success, message)
     """
     from app_memory import (find_path, identify_state_by_components,
-                            _detect_visible_components, click_component)
+                            _detect_visible_components, click_component,
+                            assess_change)
 
     app_name = resolve_app_name(app_name)
     app_dir = MEMORY_DIR / app_name.lower().replace(" ", "_") / "workflows"
@@ -590,7 +540,6 @@ def run_workflow(app_name, workflow_name):
     if not wf_path.exists():
         return False, f"Workflow '{workflow_name}' not found"
 
-    import json
     wf = json.load(open(wf_path))
     target = wf.get("target_state")
     if not target:
@@ -598,7 +547,7 @@ def run_workflow(app_name, workflow_name):
 
     # Detect current state
     activate_app(app_name)
-    import time; time.sleep(0.5)
+    time.sleep(0.5)
     visible = _detect_visible_components(app_name)
     current, f1 = identify_state_by_components(app_name, visible)
 
@@ -617,90 +566,54 @@ def run_workflow(app_name, workflow_name):
     print(f"  🗺️ Path: {current} → {' → '.join(s for _, s in path)}")
     print(f"  📍 {len(path)} clicks needed")
 
-    # Execute
+    # Execute with change verification
     for i, (click, next_state) in enumerate(path):
         print(f"  [{i+1}/{len(path)}] Clicking '{click}' → {next_state}")
+
+        # Screenshot before click
+        before_img = f"/tmp/wf_before_{i}.png"
+        subprocess.run(["screencapture", "-x", before_img], capture_output=True, timeout=5)
+
         ok, msg = click_component(app_name, click)
         if not ok:
             return False, f"Step {i+1} failed: {msg}"
-        import time; time.sleep(0.3)
+
+        time.sleep(0.5)
+
+        # Screenshot after click and verify change
+        after_img = f"/tmp/wf_after_{i}.png"
+        subprocess.run(["screencapture", "-x", after_img], capture_output=True, timeout=5)
+
+        change_type, change_ratio = assess_change(before_img, after_img)
+
+        if change_type == "no_change":
+            # Wait and retry
+            print(f"  ⚠️ No change detected after click, waiting 1.5s...")
+            time.sleep(1.5)
+            subprocess.run(["screencapture", "-x", after_img], capture_output=True, timeout=5)
+            change_type, change_ratio = assess_change(before_img, after_img)
+
+            if change_type == "no_change":
+                # Retry click
+                print(f"  ⚠️ Still no change, retrying click...")
+                ok, msg = click_component(app_name, click)
+                if not ok:
+                    return False, f"Step {i+1} retry failed: {msg}"
+                time.sleep(1.0)
+                subprocess.run(["screencapture", "-x", after_img], capture_output=True, timeout=5)
+                change_type, change_ratio = assess_change(before_img, after_img)
+
+                if change_type == "no_change":
+                    return False, f"Step {i+1}: click '{click}' had no effect after retry (ratio={change_ratio:.4f})"
+
+        print(f"  ✅ Change verified: {change_type} (ratio={change_ratio:.4f})")
+        time.sleep(0.3)
 
     return True, f"Reached '{target}' via {len(path)} clicks"
 
 
-def save_meta_workflow(workflow_name, steps, description=None, notes=None):
-    """Save a cross-app meta-workflow.
-    
-    Meta-workflows can reference single-app workflows via 'call' action,
-    and can nest other meta-workflows for complex multi-step tasks.
-    
-    Step types:
-        {"action": "call", "app": "Claude", "workflow": "check_usage"}
-        {"action": "call", "workflow": "daily_cleanup"}  # meta-workflow
-        {"action": "open", "app": "Chrome"}
-        {"action": "click", "app": "WeChat", "target": "search_bar"}
-        {"action": "copy"}  # Cmd+C, result in $clipboard
-        {"action": "paste"}  # Cmd+V from $clipboard
-        {"action": "observe", "app": "Chrome", "save_as": "$article_text"}
-        {"action": "type", "app": "WeChat", "text": "$article_text"}
-    
-    Variables:
-        $clipboard — system clipboard content
-        $output — output of the previous step
-        $param.xxx — parameters passed when calling this workflow
-    
-    Nesting:
-        A meta-workflow can call other meta-workflows or app workflows.
-        Max nesting depth: 5 (enforced at runtime).
-    
-    Args:
-        workflow_name: snake_case name
-        steps: list of step dicts (each must have 'action', may have 'app')
-        description: one-line summary, max 30 words
-        notes: lessons learned
-    """
-    # Validate: all steps must be 'call' actions
-    for i, step in enumerate(steps):
-        if step.get("action") != "call":
-            print(f"❌ Step {i}: action='{step.get('action')}' — meta-workflows only allow 'call' actions")
-            return
-        if not step.get("workflow"):
-            print(f"❌ Step {i}: missing 'workflow' field — each call must reference a workflow")
-            return
-    
-    meta_dir = MEMORY_DIR.parent / "meta_workflows"
-    meta_dir.mkdir(parents=True, exist_ok=True)
-    
-    if description and len(description.split()) > 30:
-        print(f"⚠ Description too long ({len(description.split())} words, max 30). Truncating.")
-        description = " ".join(description.split()[:30])
-    
-    workflow = {
-        "type": "meta",
-        "workflow": workflow_name,
-        "description": description or workflow_name.replace("_", " "),
-        "steps": steps,
-        "notes": notes or [],
-        "last_run": time.strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    
-    path = meta_dir / f"{workflow_name}.json"
-    with open(path, "w") as f:
-        json.dump(workflow, f, indent=2, ensure_ascii=False)
-    print(f"✅ Saved meta-workflow '{workflow_name}' ({len(steps)} steps)")
-
-
-def load_meta_workflow(workflow_name):
-    """Load a meta-workflow. Returns None if not found."""
-    path = MEMORY_DIR.parent / "meta_workflows" / f"{workflow_name}.json"
-    if path.exists():
-        with open(path) as f:
-            return json.load(f)
-    return None
-
-
 def list_all_workflows():
-    """List all workflows across all apps + meta-workflows. Returns compact summary."""
+    """List all workflows across all apps. Returns compact summary."""
     results = []
     
     # App-specific workflows
@@ -720,24 +633,11 @@ def list_all_workflows():
                     "steps": len(wf.get("steps", [])),
                 })
     
-    # Meta-workflows
-    meta_dir = MEMORY_DIR.parent / "meta_workflows"
-    if meta_dir.exists():
-        for f in sorted(meta_dir.glob("*.json")):
-            with open(f) as fh:
-                wf = json.load(fh)
-            results.append({
-                "app": "[meta]",
-                "name": wf.get("workflow", f.stem),
-                "description": wf.get("description", ""),
-                "steps": len(wf.get("steps", [])),
-            })
-    
     return results
 
 
 def _show_all_workflows():
-    """Print all workflows across all apps + meta-workflows."""
+    """Print all workflows across all apps."""
     results = list_all_workflows()
     if not results:
         print("No workflows found")

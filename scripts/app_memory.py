@@ -948,7 +948,8 @@ def identify_state(app_name, visible_text):
     best_ratio = 0.0
     
     for state_name, state_data in states.items():
-        state_visible = set(state_data.get("visible", []))
+        # Support both new format (defining_components) and old format (visible)
+        state_visible = set(state_data.get("defining_components", []) or state_data.get("visible", []))
         if not state_visible:
             continue
         
@@ -1080,7 +1081,8 @@ def identify_state_by_components(app_name, visible_components):
     best_f1 = 0.0
     
     for state_name, state_data in states.items():
-        state_visible = set(state_data.get("visible", []))
+        # Support both new format (defining_components) and old format (visible)
+        state_visible = set(state_data.get("defining_components", []) or state_data.get("visible", []))
         if not state_visible:
             continue
         overlap = len(visible_components & state_visible)
@@ -1952,6 +1954,41 @@ def learn_from_screenshot(img_path, domain=None, app_name="chromium", page_name=
     return {"saved": len(page_components), "new": new_count, "components": page_components}
 
 
+def assess_change(before_img_path, after_img_path):
+    """Assess page change by pixel comparison of before/after screenshots.
+
+    Args:
+        before_img_path: Screenshot before click
+        after_img_path: Screenshot after click
+
+    Returns:
+        (change_type, change_ratio)
+        change_type: "no_change" | "minor_change" | "page_change"
+        change_ratio: 0.0 ~ 1.0, fraction of pixels that changed
+    """
+    before = cv2.imread(str(before_img_path))
+    after = cv2.imread(str(after_img_path))
+
+    if before is None or after is None:
+        print(f"  ⚠️ assess_change: could not read images")
+        return "page_change", 1.0
+
+    # Different dimensions → definitely a big change
+    if before.shape != after.shape:
+        return "page_change", 1.0
+
+    diff = cv2.absdiff(before, after)
+    # Count pixels with difference > 30 (noise threshold)
+    change_ratio = float(np.count_nonzero(diff > 30)) / diff.size
+
+    if change_ratio < 0.01:
+        return "no_change", change_ratio
+    elif change_ratio < 0.10:
+        return "minor_change", change_ratio
+    else:
+        return "page_change", change_ratio
+
+
 def record_page_transition(before_img_path, after_img_path, click_label, click_pos,
                            domain=None, app_name="chromium", retina=False):
     """Record a state transition from before/after screenshots.
@@ -1970,6 +2007,19 @@ def record_page_transition(before_img_path, after_img_path, click_label, click_p
 
     Returns: dict with appeared/disappeared/transition info
     """
+    # Pixel-level change assessment first
+    change_type, change_ratio = assess_change(before_img_path, after_img_path)
+    if change_type == "no_change":
+        print(f"  ⚠️ No visible change after click (ratio={change_ratio:.4f})")
+        return {
+            "change_type": "no_change",
+            "change_ratio": change_ratio,
+            "appeared": [],
+            "disappeared": [],
+            "from": f"before_{click_label}",
+            "to": f"before_{click_label}",
+        }
+
     sys.path.insert(0, str(SCRIPT_DIR))
     import ui_detector
 
@@ -2063,6 +2113,8 @@ def record_page_transition(before_img_path, after_img_path, click_label, click_p
             "click_pos": list(click_pos),
             "appeared_count": len(appeared),
             "disappeared_count": len(disappeared),
+            "change_type": change_type,
+            "change_ratio": round(change_ratio, 4),
         }
 
     meta["last_updated"] = now
@@ -2070,12 +2122,14 @@ def record_page_transition(before_img_path, after_img_path, click_label, click_p
     save_states(save_dir, states)
     save_transitions(save_dir, transitions)
 
-    print(f"  🔄 Transition: {from_state} → [{click_label}] → {to_state}")
+    print(f"  🔄 Transition: {from_state} → [{click_label}] → {to_state} ({change_type}, {change_ratio:.4f})")
     return {
         "appeared": sorted(list(appeared)),
         "disappeared": sorted(list(disappeared)),
         "from": from_state,
         "to": to_state,
+        "change_type": change_type,
+        "change_ratio": round(change_ratio, 4),
     }
 
 

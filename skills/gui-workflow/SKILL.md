@@ -18,6 +18,36 @@ CONFIRM → transitions saved to profile permanently
 DISCARD → pending transitions thrown away
 ```
 
+## Change Detection
+
+Every click is verified with **pixel-level comparison** (`assess_change`):
+
+| change_ratio | change_type | Meaning |
+|---|---|---|
+| < 0.01 | `no_change` | Screenshot nearly identical — click may have missed |
+| 0.01 – 0.10 | `minor_change` | Popup, toggle, partial UI update |
+| > 0.10 | `page_change` | Navigation, full page transition |
+
+When `run_workflow()` detects `no_change`:
+1. Wait 1.5s → re-screenshot → check again
+2. If still no change → retry click → wait 1.0s → check
+3. If still no change → abort with error
+
+Transitions record `change_type` and `change_ratio` for debugging.
+
+## State Identification
+
+States are matched using **Jaccard / F1 similarity** against stored component lists.
+
+Component lists support both formats:
+- **New format:** `defining_components` — curated list of key UI elements
+- **Old format:** `visible` — all visible components (backward compatible)
+
+```python
+# identify_state_by_components checks both:
+state_comps = set(state_data.get("defining_components", []) or state_data.get("visible", []))
+```
+
 ## Workflow Lifecycle
 
 ### 1. First Time (Exploring)
@@ -28,10 +58,9 @@ The agent doesn't know the path. Every click is trial and error:
 # Each click records a PENDING transition
 click_and_record(app, "Scan", x, y)      # pending: unknown → click:Scan
 click_and_record(app, "Run", x, y)        # pending: click:Scan → click:Run
-click_and_record(app, "Quit_All", x, y)   # pending: click:Run → click:Quit_All
 
 # Workflow succeeded! Commit all transitions
-confirm_transitions(app)                   # → saved to profile.json
+confirm_transitions(app)                   # → saved to profile
 
 # OR workflow failed — discard everything
 discard_transitions(app)                   # → nothing saved, graph stays clean
@@ -51,7 +80,7 @@ save_workflow(app, "smart_cleanup", target_state="click:cleanup_done",
 ```python
 run_workflow(app, "smart_cleanup")
 # Detects current state → find_path to target → execute clicks
-# All clicks are already known, auto-verified, no screenshots needed
+# Each click verified with pixel comparison (assess_change)
 ```
 
 ## CLI Commands
@@ -91,3 +120,4 @@ for click, next_state in path:
 2. **Only `confirm_transitions()` after full end-to-end success**
 3. **First time exploring = trial and error** — expect mistakes, don't persist them
 4. **Workflow = target state** — the path is computed at runtime from the graph
+5. **Every click is verified** — `assess_change` catches missed clicks and retries automatically
