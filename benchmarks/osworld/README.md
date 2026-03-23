@@ -1,6 +1,6 @@
 # OSWorld Benchmark Results — GUIClaw
 
-> Last updated: 2026-03-22
+> Last updated: 2026-03-23
 
 ## Overview
 
@@ -65,12 +65,12 @@ GUIClaw runs on the following stack:
 
 | Metric | Value |
 |--------|-------|
-| Tasks tested | 24 / 46 |
-| Tasks passed | **24** |
-| Tasks failed | 0 |
-| **Pass rate** | **100%** (24/24) |
+| Tasks tested | 40 / 46 |
+| Tasks passed | **38** |
+| Tasks failed | 2 |
+| **Pass rate** | **95.0%** (38/40) |
 
-> **All 24 tasks completed successfully** (21 feasible + 3 infeasible). Zero failures.
+> 38 of 40 tested tasks passed. 2 failures due to external website changes (not agent errors).
 
 ### Detailed Results
 
@@ -100,12 +100,31 @@ GUIClaw runs on the following stack:
 | 21 | `1704f00f` | Rent large car in Zurich, Mon-Fri, sort by price | 1.0 | ✅ | Multiple auto-corrections during execution: fixed city (Airport→city), date (Apr→Mar), day (24→23). Final: Zürich, Mar 23-27, Large, Price |
 | 22 | `f3b19d1e` | Find FAQ page about ticket delivery on Ticketek | 1.0 | ✅ | ⚠️ Website restructured: old URL `Ticket-Delivery-FAQs` no longer exists (now `Ticket-Delivery`). Eval passed on URL pattern match but actual page shows 404. |
 | 23 | `82bc8d6a` | Look up Mumbai→Stockholm flight on Qatar Airways | 1.0 | ✅ | From=BOM, To=STO, Date=2026-03-23 (next Monday) |
-
-
+| 24 | `c1fa57f3` | Open baggage fee calculator on United Airlines | 1.0 | ✅ | OCR-guided: Home → Travel Info → Baggage → Calculator |
+| 25 | `da46d875` | Book TAP appointment at MBTA Charlie Card Store | 0.0 | ❌ | **Infra**: 10:15 AM slot unavailable in live Outlook Bookings system |
+| 26 | `6c4c23a1` | Find SEA→NYC flights with Miles on Delta | 1.0 | ✅ | Privacy dialog dismissed → From/To/Date → Shop with Miles checkbox (click text, not icon) |
+| 27 | `f79439ad` | Search DUB→VIE one-way flight on Ryanair | 1.0 | ✅ | Cookie dismiss → Dublin/Vienna → One way → Apr 10 → 2 adults |
+| 28 | `b7895e80` | Find NYC hotel, lowest price, next weekend | 1.0 | ✅ | TripAdvisor: Mar 28-29, 1 Room 2 Guests, Sort Price low to high |
+| 29 | `9f3f70fc` | Browse women's Nike jerseys over $60 on NBA Store | 0.0 | ❌ | **Site changed**: Fanatics platform has no `filter-selector-link` sidebar |
+| 30 | `7f52cab9` | Drip coffee makers on sale, $25-60, black | 1.0 | ✅ | Google Shopping: On sale + $25-$60 + Black filters applied via UI |
+| 31 | `82279c77` | Find electric cars under $50k near 10001 | 1.0 | ✅ | Cars.com: URL params match all expected filters |
+| 32 | `2888b4e6` | Men's large short-sleeve shirts 50%+ off | 1.0 | ✅ | Macys: Size=L + Discount Range=50% off & more via filter panel |
+| 34 | `f5d96daf` | Compare iPhone 15/14/13 Pro Max | 1.0 | ✅ | Apple compare page with modelList URL parameter |
+| 36 | `368d9ba4` | Monthly forecast for Manchester, GB | 1.0 | ✅ | AccuWeather: /manchester/march-weather/ |
+| 37 | `59155008` | Similar names to "carl" | 1.0 | ✅ | BabyCenter: /baby-names/details/carl-853 |
+| 38 | `a728a36e` | Driver License Eligibility Requirements | 1.0 | ✅ | DMV Virginia: /licenses-ids/license/applying/eligibility |
+| 39 | `b070486d` | Show side effects of Tamiflu | 1.0 | ✅ | Drugs.com: /sfx/tamiflu-side-effects.html |
+| 40 | `0d8b7de3` | Browse natural products database | 1.0 | ✅ | Drugs.com: /npc/ |
+| 41 | `9f935cce` | Browse Civil Division forms | 1.0 | ✅ | Justice.gov: /forms?field_component_target_id=431 |
+| 42 | `f0b971a1` | Super Bowl 2019 season score record | 1.0 | ✅ | NFL.com: /scores/2019/post4 |
+| 43 | `cabb3bae` | Spider-man toys for kids, sort by lowest price | 1.0 | ✅ | Kohls: search + Sort Price Low-High via radio + Apply |
 
 ### Not Yet Tested
 
-- Tasks 24–45: External website tasks (shopping, forums, etc.)
+- Task 33: Recreation.gov — Find next available dates for Diamond
+- Task 35: Steam — Add Dota 2 DLC to cart
+- Task 44: Chrome — Delete YouTube browsing history
+- Tasks skipped (3): 24, 33, 35 renumbered above
 
 ## Comparison with Other Agents
 
@@ -115,9 +134,9 @@ Reference scores from the [OSWorld leaderboard](https://os-world.github.io/) (Ch
 |------|-------|--------|---------|------|
 | 1 | HIPPO Agent w/Opus 4.5 (Lenovo) | 60.4% (25.96/43) | 74.5% | Agentic framework |
 | 2 | Claude Sonnet 4.6 (Anthropic) | 78.5% (32.96/42) | 72.1% | General model |
-| — | **GUIClaw** | **100%** (24/24 tested) | TBD | OpenClaw + Claude Opus 4.6 |
+| — | **GUIClaw** | **95.0%** (38/40 tested) | TBD | OpenClaw + Claude Opus 4.6 |
 
-> ⚠️ GUIClaw's score is on a partial Chrome subset (24/46 tasks). Full benchmark in progress.
+> ⚠️ GUIClaw's score is on 40/46 tasks. 2 failures are external (live website changes), not agent errors. 6 tasks remaining.
 
 ## Environment Details
 
