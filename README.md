@@ -4,22 +4,23 @@
   <h1>🦞 GUIClaw</h1>
 
   <p>
-    <strong>See your screen. Learn every button. Click precisely.</strong>
+    <strong>See the screen. Learn the UI. Click the right thing.</strong>
     <br />
-    Vision-based desktop automation skills built on <a href="https://github.com/openclaw/openclaw">OpenClaw</a>.
+    Vision-driven desktop automation skills for <a href="https://github.com/openclaw/openclaw">OpenClaw</a>.
     <br />
-    <em>Requires OpenClaw as the runtime — not a standalone API or library.</em>
+    <em>GUIClaw is an OpenClaw skill, not a standalone API, CLI, or Python library.</em>
   </p>
 
   <p>
     <a href="#-quick-start"><img src="https://img.shields.io/badge/Quick_Start-blue?style=for-the-badge" /></a>
-    <a href="#-quick-start"><img src="https://img.shields.io/badge/🦞_OpenClaw-red?style=for-the-badge" /></a>
+    <a href="https://github.com/openclaw/openclaw"><img src="https://img.shields.io/badge/OpenClaw-Required-red?style=for-the-badge" /></a>
     <a href="https://discord.gg/BQbUmVuD"><img src="https://img.shields.io/badge/Discord-7289da?style=for-the-badge&logo=discord&logoColor=white" /></a>
   </p>
 
   <p>
     <img src="https://img.shields.io/badge/Platform-macOS_Apple_Silicon-black?logo=apple" />
-    <img src="https://img.shields.io/badge/Detection-GPA_GUI_Detector-green" />
+    <img src="https://img.shields.io/badge/Runtime-OpenClaw-orange" />
+    <img src="https://img.shields.io/badge/Detection-GPA--GUI--Detector-green" />
     <img src="https://img.shields.io/badge/OCR-Apple_Vision-blue" />
     <img src="https://img.shields.io/badge/License-MIT-yellow" />
   </p>
