@@ -39,12 +39,15 @@ Use template matching instead of full detection:
 
 ## Coordinate System
 
-- **Screen**: 1512×982 logical pixels (Retina 2x → 3024×1964 physical)
-- **Templates**: saved in physical pixels (from full-screen screenshot)
-- **Matching**: full-screen template match → physical center ÷ 2 = logical coords
-- **Clicking**: logical coordinates via `platform_input.click_at(x, y)`
+**All coordinates = screenshot pixels. No conversion needed.**
+
+screencapture output matches pynput/CGEvent coordinate space (verified on Mac with various display modes). detect_all returns screenshot pixel coordinates, and click_at uses the same coordinate space.
+
+- **Templates**: saved in screenshot pixels (from full-screen screenshot crop)
+- **Matching**: full-screen template match → center pixel = click coordinate
+- **Clicking**: screenshot pixel coordinates via `platform_input.click_at(x, y)`
 - **Window validation**: match position checked against `get_window_bounds()` to reject other apps
-- **Remote VMs (OSWorld)**: 1920×1080 (no Retina), coordinates are 1:1
+- **Remote VMs (OSWorld)**: 1920×1080, coordinates are 1:1 (same principle)
 
 ## State Detection
 
