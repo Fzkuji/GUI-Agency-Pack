@@ -336,7 +336,7 @@ def screenshot_region(out_path, method="auto", x1=None, y1=None, x2=None, y2=Non
                       bg_color=None, content_threshold=245):
     """Take a screenshot of a specific region.
     
-    Two strategies (per GUIClaw design):
+    Two strategies (per GUI Agent Skills design):
     
     Strategy 1 — Anchor-based (when text/components can define boundaries):
     - "anchors": Use OCR text as reference points to define crop boundaries.

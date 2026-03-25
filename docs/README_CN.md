@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="../assets/banner.png" alt="GUIClaw" width="100%" />
+  <img src="../assets/banner.png" alt="GUI Agent Skills" width="100%" />
 
-  <h1>🦞 GUIClaw</h1>
+  <h1>🦞 GUI Agent Skills</h1>
 
   <p>
     <strong>看见屏幕。学会按钮。精准点击。</strong>
@@ -164,20 +164,20 @@ CONFIRM  → 截屏 → 进程列表为空 → 已终止 ✅
 
 ## ⚠️ 前置要求
 
-GUIClaw 是一个 **OpenClaw 技能** — 它运行在 [OpenClaw](https://github.com/openclaw/openclaw) 内部，利用 OpenClaw 的 LLM 编排来推理 UI 操作。它**不是**独立的 API、命令行工具或 Python 库。你需要：
+GUI Agent Skills 是一个 **OpenClaw 技能** — 它运行在 [OpenClaw](https://github.com/openclaw/openclaw) 内部，利用 OpenClaw 的 LLM 编排来推理 UI 操作。它**不是**独立的 API、命令行工具或 Python 库。你需要：
 
 1. **[OpenClaw](https://github.com/openclaw/openclaw)** 已安装并运行
 2. **macOS + Apple Silicon**（用于 GPA-GUI-Detector 和 Apple Vision OCR）
 3. **辅助功能权限** 已授予 OpenClaw / Terminal
 
-LLM（Claude、GPT 等）由 OpenClaw 配置提供 — GUIClaw 本身不直接调用任何外部 API。
+LLM（Claude、GPT 等）由 OpenClaw 配置提供 — GUI Agent Skills 本身不直接调用任何外部 API。
 
 ## 🚀 快速开始
 
 **1. 克隆并安装**
 ```bash
-git clone https://github.com/Fzkuji/GUIClaw.git
-cd GUIClaw
+git clone https://github.com/Fzkuji/GUI Agent Skills.git
+cd GUI Agent Skills
 bash scripts/setup.sh
 ```
 
@@ -196,7 +196,7 @@ bash scripts/setup.sh
 }
 ```
 
-> ⚠️ **`timeoutSec: 300`** 很重要 — GUIClaw 的操作链（截屏 → 检测 → 点击 → 等待 → 验证）可能较长，推荐 5 分钟超时。默认超时太短会中途终止命令。
+> ⚠️ **`timeoutSec: 300`** 很重要 — GUI Agent Skills 的操作链（截屏 → 检测 → 点击 → 等待 → 验证）可能较长，推荐 5 分钟超时。默认超时太短会中途终止命令。
 
 > 💡 **`queue.mode: "interrupt"`** 推荐启用 — GUI 操作耗时较长，interrupt 模式允许你发送任意消息立即中止当前智能体操作。否则消息会排队，智能体完成当前动作后才能看到。
 
@@ -205,7 +205,7 @@ bash scripts/setup.sh
 ## 🧠 工作原理
 
 <p align="center">
-  <img src="../assets/architecture.png" alt="GUIClaw 架构图" width="700" />
+  <img src="../assets/architecture.png" alt="GUI Agent Skills 架构图" width="700" />
 </p>
 
 架构分为三层：
@@ -417,7 +417,7 @@ python3 agent.py wait_for --app "CleanMyMac X" --component Run
 
 ## 🔴 视觉 vs 命令
 
-GUIClaw 用视觉检测做**决策**，用最高效的方式做**执行**：
+GUI Agent Skills 用视觉检测做**决策**，用最高效的方式做**执行**：
 
 | | 必须基于视觉 | 可以用键盘/命令 |
 |---|---|---|
@@ -460,7 +460,7 @@ GUIClaw 用视觉检测做**决策**，用最高效的方式做**执行**：
 ## 🗂️ 项目结构
 
 ```
-GUIClaw/
+GUI Agent Skills/
 ├── SKILL.md                   # 🧠 主技能文件 — 智能体首先读取此文件
 │                              #    定义：视觉 vs 命令边界、三种视觉方法、执行流程
 ├── skills/                    # 📖 子技能
@@ -507,7 +507,7 @@ GUIClaw/
 
 | | |
 |---|---|
-| 🦞 **[OpenClaw](https://github.com/openclaw/openclaw)** | AI 助手框架 — 将 GUIClaw 作为技能加载 |
+| 🦞 **[OpenClaw](https://github.com/openclaw/openclaw)** | AI 助手框架 — 将 GUI Agent Skills 作为技能加载 |
 | 🔍 **[GPA-GUI-Detector](https://huggingface.co/Salesforce/GPA-GUI-Detector)** | Salesforce/GPA-GUI-Detector — 通用 UI 元素检测模型 |
 | 💬 **[Discord 社区](https://discord.gg/BQbUmVuD)** | 获取帮助，分享反馈 |
 
@@ -519,15 +519,15 @@ MIT — 详见 [LICENSE](../LICENSE)。
 
 ## 📌 引用
 
-如果 GUIClaw 对你的研究有帮助，请引用：
+如果 GUI Agent Skills 对你的研究有帮助，请引用：
 
 ```bibtex
-@misc{fu2026guiclaw,
+@misc{fu2026gui-agent-skills,
   author       = {Fu, Zichuan},
-  title        = {GUIClaw: Visual Memory-Driven GUI Automation for macOS},
+  title        = {GUI Agent Skills: Visual Memory-Driven GUI Automation for macOS},
   year         = {2026},
   publisher    = {GitHub},
-  url          = {https://github.com/Fzkuji/GUIClaw},
+  url          = {https://github.com/Fzkuji/GUI Agent Skills},
 }
 ```
 
@@ -536,15 +536,15 @@ MIT — 详见 [LICENSE](../LICENSE)。
 ## ⭐ Star History
 
 <p align="center">
-  <a href="https://star-history.com/#Fzkuji/GUIClaw&Date">
+  <a href="https://star-history.com/#Fzkuji/GUI Agent Skills&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUIClaw&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUIClaw&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Fzkuji/GUIClaw&type=Date" width="600" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUI Agent Skills&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUI Agent Skills&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Fzkuji/GUI Agent Skills&type=Date" width="600" />
     </picture>
   </a>
 </p>
 
 <p align="center">
-  <sub>由 🦞 GUIClaw 团队构建 · 基于 <a href="https://github.com/openclaw/openclaw">OpenClaw</a></sub>
+  <sub>由 🦞 GUI Agent Skills 团队构建 · 基于 <a href="https://github.com/openclaw/openclaw">OpenClaw</a></sub>
 </p>

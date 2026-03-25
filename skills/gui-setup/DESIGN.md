@@ -4,7 +4,7 @@
 
 ## 核心目的
 
-一键搭建 GUIClaw 运行环境。用户只需要 `bash scripts/setup.sh`，不需要手动安装任何依赖。
+一键搭建 GUI Agent Skills 运行环境。用户只需要 `bash scripts/setup.sh`，不需要手动安装任何依赖。
 
 ## setup.sh 做的事
 
@@ -19,12 +19,12 @@
 
 ### 为什么用独立虚拟环境而不是 pip install
 
-GUIClaw 的依赖（PyTorch、ultralytics）很重，和用户的其他 Python 项目可能冲突。独立 venv 隔离依赖。
+GUI Agent Skills 的依赖（PyTorch、ultralytics）很重，和用户的其他 Python 项目可能冲突。独立 venv 隔离依赖。
 
 路径固定为 `~/gui-agent-env/` 而不是项目内的 `.venv`，因为：
-- GUIClaw 作为 OpenClaw skill 可能被安装到不同位置
+- GUI Agent Skills 作为 OpenClaw skill 可能被安装到不同位置
 - scripts 里 hardcode 了 `~/gui-agent-env/bin/python3`
-- 多个 GUIClaw 实例可以共享同一个 venv
+- 多个 GUI Agent Skills 实例可以共享同一个 venv
 
 ### 为什么模型放在 ~/GPA-GUI-Detector/ 而不是项目内
 

@@ -6,8 +6,8 @@ description: "First-time setup for GUI Agent on a new Mac — install dependenci
 # Setup — New Machine
 
 ```bash
-git clone https://github.com/Fzkuji/GUIClaw.git
-cd GUIClaw
+git clone https://github.com/Fzkuji/GUI Agent Skills.git
+cd GUI Agent Skills
 bash scripts/setup.sh
 ```
 
@@ -34,7 +34,7 @@ Add to `~/.openclaw/openclaw.json` (or use `openclaw config`):
 }
 ```
 
-**Why `timeoutSec: 300`**: GUIClaw operation chains (screenshot → detect → click → wait → verify) can take a while. A 5-minute timeout is recommended. The default is too short and will kill commands mid-execution with SIGTERM.
+**Why `timeoutSec: 300`**: GUI Agent Skills operation chains (screenshot → detect → click → wait → verify) can take a while. A 5-minute timeout is recommended. The default is too short and will kill commands mid-execution with SIGTERM.
 
 **Why `queue.mode: "interrupt"`**: GUI operations take time. Interrupt mode lets you send any message to immediately abort the current agent operation.
 

@@ -1,14 +1,14 @@
 <div align="center">
-  <img src="assets/banner.png" alt="GUIClaw" width="100%" />
+  <img src="assets/banner.png" alt="GUI Agent Skills" width="100%" />
 
-  <h1>🦞 GUIClaw</h1>
+  <h1>🦞 GUI Agent Skills</h1>
 
   <p>
     <strong>See the screen. Learn the UI. Click the right thing.</strong>
     <br />
     Vision-driven desktop automation skills for <a href="https://github.com/openclaw/openclaw">OpenClaw</a>.
     <br />
-    <em>GUIClaw is an OpenClaw skill, not a standalone API, CLI, or Python library.</em>
+    <em>GUI Agent Skills is an OpenClaw skill, not a standalone API, CLI, or Python library.</em>
   </p>
 
   <p>
@@ -165,20 +165,20 @@ CONFIRM  → Screenshot → process list empty → terminated ✅
 
 ## ⚠️ Prerequisites
 
-GUIClaw is an **OpenClaw skill** — it runs inside [OpenClaw](https://github.com/openclaw/openclaw) and uses OpenClaw's LLM orchestration to reason about UI actions. It is **not** a standalone API, CLI tool, or Python library. You need:
+GUI Agent Skills is an **OpenClaw skill** — it runs inside [OpenClaw](https://github.com/openclaw/openclaw) and uses OpenClaw's LLM orchestration to reason about UI actions. It is **not** a standalone API, CLI tool, or Python library. You need:
 
 1. **[OpenClaw](https://github.com/openclaw/openclaw)** installed and running
 2. **macOS with Apple Silicon** (for GPA-GUI-Detector and Apple Vision OCR)
 3. **Accessibility permissions** granted to OpenClaw/Terminal
 
-The LLM (Claude, GPT, etc.) is provided by your OpenClaw configuration — GUIClaw itself does not call any external APIs directly.
+The LLM (Claude, GPT, etc.) is provided by your OpenClaw configuration — GUI Agent Skills itself does not call any external APIs directly.
 
 ## 🚀 Quick Start
 
 **1. Clone & install**
 ```bash
-git clone https://github.com/Fzkuji/GUIClaw.git
-cd GUIClaw
+git clone https://github.com/Fzkuji/GUI Agent Skills.git
+cd GUI Agent Skills
 bash scripts/setup.sh
 ```
 
@@ -197,7 +197,7 @@ Add to `~/.openclaw/openclaw.json`:
 }
 ```
 
-> ⚠️ **`timeoutSec: 300`** is important — GUIClaw operation chains (screenshot → detect → click → wait → verify) can take a while. A 5-minute timeout is recommended. The default is too short and will kill commands mid-execution.
+> ⚠️ **`timeoutSec: 300`** is important — GUI Agent Skills operation chains (screenshot → detect → click → wait → verify) can take a while. A 5-minute timeout is recommended. The default is too short and will kill commands mid-execution.
 
 > 💡 **`queue.mode: "interrupt"`** is recommended — GUI operations take time, and interrupt mode lets you send any message to immediately abort the current agent operation. Without it, your messages queue up and the agent won't see them until it finishes.
 
@@ -206,7 +206,7 @@ Then just chat with your OpenClaw agent — it reads `SKILL.md` and handles ever
 ## 🧠 How It Works
 
 <p align="center">
-  <img src="assets/architecture.png" alt="GUIClaw Architecture" width="700" />
+  <img src="assets/architecture.png" alt="GUI Agent Skills Architecture" width="700" />
 </p>
 
 The architecture has three layers:
@@ -418,7 +418,7 @@ python3 agent.py wait_for --app "CleanMyMac X" --component Run
 
 ## 🔴 Vision vs Command
 
-GUIClaw uses visual detection for **decisions** and the most efficient method for **execution**:
+GUI Agent Skills uses visual detection for **decisions** and the most efficient method for **execution**:
 
 | | Must be vision-based | May use keyboard/CLI |
 |---|---|---|
@@ -461,7 +461,7 @@ Every action follows a unified detect-match-execute-save protocol:
 ## 🗂️ Project Structure
 
 ```
-GUIClaw/
+GUI Agent Skills/
 ├── SKILL.md                   # 🧠 Main skill — agent reads this first
 │                              #    Defines: Vision vs Command boundary,
 │                              #    three visual methods, execution flow
@@ -509,7 +509,7 @@ GUIClaw/
 
 | | |
 |---|---|
-| 🦞 **[OpenClaw](https://github.com/openclaw/openclaw)** | AI assistant framework — loads GUIClaw as a skill |
+| 🦞 **[OpenClaw](https://github.com/openclaw/openclaw)** | AI assistant framework — loads GUI Agent Skills as a skill |
 | 🔍 **[GPA-GUI-Detector](https://huggingface.co/Salesforce/GPA-GUI-Detector)** | Salesforce/GPA-GUI-Detector — general-purpose UI element detection model |
 | 💬 **[Discord Community](https://discord.gg/BQbUmVuD)** | Get help, share feedback |
 
@@ -521,15 +521,15 @@ MIT — see [LICENSE](LICENSE) for details.
 
 ## 📌 Citation
 
-If you find GUIClaw useful in your research, please cite:
+If you find GUI Agent Skills useful in your research, please cite:
 
 ```bibtex
-@misc{fu2026guiclaw,
+@misc{fu2026gui-agent-skills,
   author       = {Fu, Zichuan},
-  title        = {GUIClaw: Visual Memory-Driven GUI Automation for macOS},
+  title        = {GUI Agent Skills: Visual Memory-Driven GUI Automation for macOS},
   year         = {2026},
   publisher    = {GitHub},
-  url          = {https://github.com/Fzkuji/GUIClaw},
+  url          = {https://github.com/Fzkuji/GUI Agent Skills},
 }
 ```
 
@@ -538,15 +538,15 @@ If you find GUIClaw useful in your research, please cite:
 ## ⭐ Star History
 
 <p align="center">
-  <a href="https://star-history.com/#Fzkuji/GUIClaw&Date">
+  <a href="https://star-history.com/#Fzkuji/GUI Agent Skills&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUIClaw&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUIClaw&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Fzkuji/GUIClaw&type=Date" width="600" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUI Agent Skills&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUI Agent Skills&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Fzkuji/GUI Agent Skills&type=Date" width="600" />
     </picture>
   </a>
 </p>
 
 <p align="center">
-  <sub>Built with 🦞 by the GUIClaw team · Powered by <a href="https://github.com/openclaw/openclaw">OpenClaw</a></sub>
+  <sub>Built with 🦞 by the GUI Agent Skills team · Powered by <a href="https://github.com/openclaw/openclaw">OpenClaw</a></sub>
 </p>

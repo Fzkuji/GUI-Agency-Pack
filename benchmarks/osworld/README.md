@@ -1,10 +1,10 @@
-# OSWorld Benchmark Results — GUIClaw
+# OSWorld Benchmark Results — GUI Agent Skills
 
 > Last updated: 2026-03-23
 
 ## Overview
 
-**GUIClaw** is evaluated on [OSWorld](https://github.com/xlang-ai/OSWorld), a real-computer benchmark for multimodal agents with 356 tasks across 10 domains.
+**GUI Agent Skills** is evaluated on [OSWorld](https://github.com/xlang-ai/OSWorld), a real-computer benchmark for multimodal agents with 356 tasks across 10 domains.
 
 ## Results Summary
 
@@ -32,7 +32,7 @@ Reference scores from the [OSWorld leaderboard](https://os-world.github.io/):
 |------|-------|--------|---------|------|
 | 1 | HIPPO Agent w/Opus 4.5 (Lenovo) | 60.4% | 74.5% | Agentic framework |
 | 2 | Claude Sonnet 4.6 (Anthropic) | 78.5% | 72.1% | General model |
-| — | **GUIClaw** | **93.5%** | TBD | OpenClaw + Claude Opus 4.6 |
+| — | **GUI Agent Skills** | **93.5%** | TBD | OpenClaw + Claude Opus 4.6 |
 
 ## Framework & Pipeline
 
@@ -42,7 +42,7 @@ Reference scores from the [OSWorld leaderboard](https://os-world.github.io/):
 │  ┌─────────────────────────────────────────────────┐    │
 │  │  OpenClaw (runtime framework)                   │    │
 │  │  └─ Claude Opus 4.6 (LLM reasoning & planning)  │    │
-│  │     └─ GUIClaw Skill                            │    │
+│  │     └─ GUI Agent Skills Skill                            │    │
 │  │        ├─ Salesforce/GPA-GUI-Detector (UI det.) │    │
 │  │        ├─ Apple Vision OCR (text recognition)   │    │
 │  │        └─ pyautogui (action execution)          │    │

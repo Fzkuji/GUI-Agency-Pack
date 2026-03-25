@@ -1,4 +1,4 @@
-# OSWorld Chrome Domain — GUIClaw Results
+# OSWorld Chrome Domain — GUI Agent Skills Results
 
 > 46 tasks tested | **43 / 46** (93.5%) | 2026-03-22 ~ 2026-03-23
 
