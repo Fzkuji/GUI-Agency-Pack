@@ -73,7 +73,7 @@ echo -n "text" | xsel --clipboard --input
 xsel --clipboard --output
 ```
 
-**⚠️ Warning:** `xclip` sets the X11 clipboard, but Ctrl+V in some apps (especially LibreOffice) may not read it correctly. Prefer `xdotool type` for direct text input.
+**⚠️ Warning:** `xclip` sets the X11 clipboard, but Ctrl+V in some apps may not read it correctly. Prefer `xdotool type` for direct text input.
 
 ## Window Management (wmctrl)
 ```bash
@@ -124,12 +124,6 @@ text = pytesseract.image_to_string(Image.open("screenshot.png"))
 | wmctrl | wmctrl | `sudo apt install wmctrl` |
 | scrot | scrot | `sudo apt install scrot` |
 | tesseract | tesseract-ocr | `sudo apt install tesseract-ocr` |
-
-## LibreOffice-Specific Notes
-- **Number display:** Large numbers may show as `3E+07` in narrow columns — this is a **display issue only**, data is intact. Widen the column to verify. Do NOT prefix with apostrophe unless the evaluator explicitly expects text type — apostrophe changes the data type from number to string, which may cause comparison failures.
-- **Save dialog:** After Ctrl+S on xlsx, press Enter to confirm "Keep Current Format"
-- **Name Box:** Click the cell reference box (top-left) → type cell reference (e.g., "A2") → Enter to navigate
-- **Close file without quitting:** Ctrl+W (not Ctrl+Q which quits LO entirely)
 
 ## Notes
 - X11 is required for xdotool and xclip (Wayland needs different tools)
