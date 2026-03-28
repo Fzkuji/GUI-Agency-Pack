@@ -198,8 +198,8 @@ The LLM (Claude, GPT, etc.) is provided by your OpenClaw configuration — GUI A
 
 **1. Clone & install**
 ```bash
-git clone https://github.com/Fzkuji/GUI-Agent-Skills.git
-cd GUI-Agent-Skills
+git clone https://github.com/Fzkuji/GUI-Agency-Pack.git
+cd GUI-Agency-Pack
 bash scripts/setup.sh
 ```
 
@@ -398,7 +398,7 @@ Every action follows a unified detect-match-execute-save protocol:
 ## 🗂️ Project Structure
 
 ```
-GUI-Agent-Skills/
+GUI-Agency-Pack/
 ├── SKILL.md                   # 🧠 Main skill — orchestration layer
 │                              #    Safety protocol, vision-vs-command boundary,
 │                              #    routes to sub-skills as needed
@@ -466,7 +466,7 @@ If you find GUI Agent Skills useful in your research, please cite:
   title        = {GUI Agent Skills: Visual Memory-Driven GUI Automation for macOS},
   year         = {2026},
   publisher    = {GitHub},
-  url          = {https://github.com/Fzkuji/GUI-Agent-Skills},
+  url          = {https://github.com/Fzkuji/GUI-Agency-Pack},
 }
 ```
 
@@ -475,11 +475,11 @@ If you find GUI Agent Skills useful in your research, please cite:
 ## ⭐ Star History
 
 <p align="center">
-  <a href="https://star-history.com/#Fzkuji/GUI-Agent-Skills&Date">
+  <a href="https://star-history.com/#Fzkuji/GUI-Agency-Pack&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUI-Agent-Skills&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUI-Agent-Skills&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Fzkuji/GUI-Agent-Skills&type=Date" width="600" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUI-Agency-Pack&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Fzkuji/GUI-Agency-Pack&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Fzkuji/GUI-Agency-Pack&type=Date" width="600" />
     </picture>
   </a>
 </p>
