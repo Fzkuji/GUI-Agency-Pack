@@ -165,4 +165,9 @@ def print_summary():
 
 
 if __name__ == "__main__":
-    print_summary()
+    import sys
+    if "--json" in sys.argv:
+        import json
+        print(json.dumps(detect_platform(), default=str))
+    else:
+        print_summary()

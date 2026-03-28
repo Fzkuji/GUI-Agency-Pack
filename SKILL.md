@@ -276,19 +276,32 @@ If you forget, data is auto-saved next time tracker starts.
 7. **Watch for new dialogs/windows** — clicking a button may spawn a new dialog or window. After clicking, check if a new window appeared and handle it before continuing.
 8. **Every click uses `click_and_record` or `click_component`** — never raw `click_at()`. Every click must record a state transition.
 
-## Platform Detection
+## Platform Setup (MANDATORY FIRST STEP)
 
-Different platforms use different tools. Run `platforms/detect.py` to auto-detect:
+Before any GUI operation, activate the platform detection:
 
 ```bash
-python3 platforms/detect.py
+python3 {baseDir}/scripts/activate.py
 ```
 
-Platform-specific guides:
-- **macOS**: `read {baseDir}/platforms/macos.md` — pynput, screencapture, Apple Vision OCR, Cmd shortcuts
-- **Linux**: `read {baseDir}/platforms/linux.md` — pyautogui/xdotool, scrot, wmctrl, Ctrl shortcuts
+This auto-detects:
+- Current OS (macOS / Linux / Windows)
+- Available tools (pynput, pyautogui, xdotool, etc.)
+- Recommended input method, screenshot tool, clipboard, OCR
 
-When operating on a **remote machine** (VM, SSH), detect the remote platform and use its tools via the remote execution channel, while running OCR/detection locally on the host.
+**Read the output and follow the platform-specific instructions. Do NOT use tools from other platforms.**
+
+Platform guides:
+- **macOS**: `{baseDir}/platforms/macos.md` — pynput, screencapture, Apple Vision OCR, Cmd shortcuts
+- **Linux**: `{baseDir}/platforms/linux.md` — pyautogui/xdotool, scrot, wmctrl, Ctrl shortcuts
+
+### Remote Operation (VM/SSH)
+
+When operating on a remote machine, there are **two platforms**:
+- **Host** (where you run OCR/detection) → run `activate.py` locally
+- **Target** (where GUI actions execute) → run `platforms/detect.py` on the remote machine
+
+OCR and visual detection run on the **host**. GUI actions (click, type) execute on the **target**.
 
 ## Input Methods (platform_input.py)
 
