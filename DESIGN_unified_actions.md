@@ -1,144 +1,130 @@
-# Unified Actions 设计方案
+# Unified Actions 设计方案 v2
 
-## 目标
+## 概述
 
-模型调用统一的 GUI action 接口，不需要知道底层用什么工具。脚本根据 target 自动选择正确的实现。
+两个独立脚本，各司其职：
 
-## 架构
+- **activate.py** — 检测本机环境，告诉模型"你在哪"
+- **gui_action.py** — 统一 GUI 操作接口，模型每次调用时指定操作目标
 
-```
-模型
-  ↓ 调用
-统一接口 (gui_action.py)
-  ↓ 根据 target 路由
-┌─────────────┐    ┌──────────────────┐
-│ local (Mac)  │    │ vm:IP (Linux VM) │
-│ pynput       │    │ HTTP API →       │
-│ screencapture│    │   pyautogui      │
-│ pbcopy       │    │   xdotool        │
-│ osascript    │    │   wmctrl         │
-└─────────────┘    └──────────────────┘
-```
+## activate.py（精简版）
 
-## 激活 (activate.py --target)
-
-`--target` 是**必填参数**。
+只做一件事：检测并打印 OpenClaw 运行的本机环境。
 
 ```bash
-# 操作本机
-python3 activate.py --target local
-
-# 操作远程 VM
-python3 activate.py --target vm:172.16.105.128
-
-# 切换目标（重新 activate）
-python3 activate.py --target local
+python3 activate.py
 ```
 
-activate.py 做的事：
-1. 检测 target 平台（local → 读本机 / vm:IP → 通过 API 检测远程）
-2. 输出平台摘要到 stdout（进入模型上下文）
-3. 写状态文件 `~/.gui_agent_target`（记录当前 target）
-4. 复制对应 `_actions.yaml`（模型后续 read 用）
+输出：
+```
+Platform: macOS (arm64)
+Default target: local
+Available tools: pynput, screencapture, pbcopy, osascript
+```
 
-## 统一接口 (gui_action.py)
+- 不管 target 切换
+- 不写状态文件
+- 不复制 actions 文件
+- 只是信息输出
+
+## gui_action.py（统一操作接口）
 
 ```bash
-# 模型这样调用：
+# 本机操作（默认，不加参数）
 python3 gui_action.py click 500 300
-python3 gui_action.py type "Hello World"
-python3 gui_action.py screenshot /tmp/screen.png
-python3 gui_action.py shortcut ctrl+s
-python3 gui_action.py focus "window title"
-python3 gui_action.py close "window title"
-python3 gui_action.py key enter
+python3 gui_action.py type "hello"
+python3 gui_action.py screenshot /tmp/s.png
+
+# 远程操作（加 --remote）
+python3 gui_action.py click 500 300 --remote http://172.16.105.128:5000
+python3 gui_action.py type "hello" --remote http://172.16.105.128:5000
+python3 gui_action.py screenshot /tmp/s.png --remote http://172.16.105.128:5000
+
+# 未来可扩展
+python3 gui_action.py click 500 300 --remote ssh://user@host
 ```
 
-脚本内部：
+### 可用操作
+
+| 操作 | 参数 | 说明 |
+|------|------|------|
+| click | x y | 左键点击 |
+| double_click | x y | 双击 |
+| right_click | x y | 右键 |
+| type | "text" | 输入文本 |
+| key | name | 按键（enter/tab/escape...） |
+| shortcut | keys | 组合键（ctrl+s/cmd+w...） |
+| screenshot | [path] | 截图，返回保存路径 |
+| focus | "title" | 激活窗口 |
+| close | "title" | 关闭窗口 |
+| list_windows | | 列出窗口 |
+
+### 内部实现
+
 ```python
-# 读取当前 target
-target = read_target_file()  # 从 ~/.gui_agent_target
-
-if target == "local":
-    # Mac: 用 pynput / screencapture
-    execute_local(action, args)
-elif target.startswith("vm:"):
-    # VM: 通过 HTTP API 执行
-    vm_ip = target.split(":")[1]
-    execute_vm(action, args, vm_ip)
+def execute(action, args, remote=None):
+    if remote is None:
+        # 本机：检测 OS，选择工具
+        if sys.platform == "darwin":
+            return execute_mac(action, args)      # pynput
+        else:
+            return execute_linux(action, args)     # pyautogui/xdotool
+    
+    elif remote.startswith("http"):
+        # HTTP API（如 OSWorld VM）
+        return execute_http(action, args, remote)  # requests.post
+    
+    elif remote.startswith("ssh"):
+        # SSH（通用远程）
+        return execute_ssh(action, args, remote)   # subprocess ssh
 ```
 
-## 可用 Actions
+### 内部映射
 
-| Action | 参数 | 说明 |
-|--------|------|------|
-| `click` | x y | 点击坐标 |
-| `double_click` | x y | 双击 |
-| `right_click` | x y | 右键点击 |
-| `type` | "text" | 输入文本 |
-| `key` | keyname | 按键（enter, tab, escape, delete, up, down...） |
-| `shortcut` | keys | 组合键（ctrl+s, ctrl+shift+t, alt+F4...） |
-| `screenshot` | [path] | 截图（默认 /tmp/gui_screenshot.png） |
-| `focus` | "title" | 激活窗口 |
-| `close` | "title" | 关闭窗口 |
-| `list_windows` | | 列出所有窗口 |
+| 操作 | macOS 本机 | Linux 本机 | HTTP 远程 | SSH 远程 |
+|------|-----------|-----------|----------|---------|
+| click | pynput click_at | pyautogui.click | POST→pyautogui.click | ssh→pyautogui.click |
+| type | pynput paste_text | xdotool type | POST→xdotool type | ssh→xdotool type |
+| screenshot | screencapture | scrot/pyautogui | GET /screenshot | ssh+scrot+scp |
+| focus | osascript activate | wmctrl -a | POST→wmctrl -a | ssh→wmctrl -a |
+| shortcut | pynput key_combo | xdotool key | POST→xdotool key | ssh→xdotool key |
 
-## 内部实现映射
+## 模型的视角
 
-| Action | local (Mac) | vm (Linux) |
-|--------|------------|------------|
-| click | `pynput click_at(x, y)` | `POST /execute → pyautogui.click(x, y)` |
-| type | `pynput paste_text(text)` | `POST /execute → xdotool type "text"` |
-| key | `pynput key_press(key)` | `POST /execute → pyautogui.press(key)` |
-| shortcut | `pynput key_combo(keys)` | `POST /execute → pyautogui.hotkey(keys)` |
-| screenshot | `screencapture -x path` | `GET /screenshot → save to path` |
-| focus | `osascript activate app` | `POST /execute → wmctrl -a "title"` |
-| close | `osascript close` | `POST /execute → wmctrl -c "title"` |
-| list_windows | `osascript` | `POST /execute → wmctrl -l` |
+模型只需要知道：
 
-## 坐标处理
+1. **gui_action.py 能做什么**（click/type/screenshot 等）
+2. **不加 --remote = 本机操作**
+3. **加 --remote URL = 远程操作**
 
-| Target | 检测空间 | 点击空间 | 缩放 |
-|--------|---------|---------|------|
-| local Mac (Retina) | 2x | 1x | detect_to_click() 自动 |
-| local Mac (非 Retina) | 1x | 1x | 无 |
-| vm Linux | 1x | 1x | 无 |
-
-screenshot action 返回时附带坐标空间信息，OCR 在 host 上跑完后坐标直接可用。
-
-## 状态文件
-
-`~/.gui_agent_target`:
-```json
-{
-    "target": "vm:172.16.105.128",
-    "platform": "linux",
-    "activated_at": "2026-03-29 13:50:00"
-}
-```
-
-每次 activate 覆写。gui_action.py 每次执行时读取。
+不需要知道：pynput、pyautogui、xdotool、HTTP API、SSH 细节
 
 ## 文件结构
 
 ```
 scripts/
-├── activate.py          # 激活 + 平台检测 + 写状态
-├── gui_action.py        # 统一 action 接口
+├── activate.py            # 检测本机环境
+├── gui_action.py          # 统一操作入口
 ├── backends/
-│   ├── local_mac.py     # Mac 本机实现
-│   └── remote_vm.py     # VM 远程实现
+│   ├── __init__.py
+│   ├── mac_local.py       # macOS 本机实现
+│   ├── linux_local.py     # Linux 本机实现
+│   ├── http_remote.py     # HTTP API 远程（OSWorld）
+│   └── ssh_remote.py      # SSH 远程（通用，未来）
 ```
 
-## SKILL.md 改动
+## 示例流程
 
-```markdown
-## STEP 0: Activate (MANDATORY)
-python3 {baseDir}/scripts/activate.py --target <local|vm:IP>
-
-## Actions
-All GUI operations go through:
-python3 {baseDir}/scripts/gui_action.py <action> [args...]
 ```
+用户："帮我在 VM 的 LibreOffice 里填表格"
 
-模型只需要知道两件事：activate 指定 target，gui_action 执行操作。
+模型：
+1. 知道要操作 VM → 后续 action 加 --remote
+2. gui_action.py screenshot /tmp/s.png --remote http://172.16.105.128:5000
+3. （下载截图到本地，跑 OCR）
+4. gui_action.py click 91 184 --remote http://172.16.105.128:5000
+5. gui_action.py type "A2" --remote http://172.16.105.128:5000
+6. gui_action.py key enter --remote http://172.16.105.128:5000
+7. gui_action.py type "Ming Pavilion" --remote http://172.16.105.128:5000
+8. gui_action.py shortcut ctrl+s --remote http://172.16.105.128:5000
+```
