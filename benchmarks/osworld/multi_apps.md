@@ -1,17 +1,17 @@
 # OSWorld Multi-Apps Domain — GUI Agent Skills Results
 
-> 101 tasks total | **1 passed / 1 attempted (GUI skills)** | 100 remaining | 2026-03-30
+> 101 tasks total | **2 passed / 2 attempted (GUI skills)** | 99 remaining | 2026-03-30
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
 | Total tasks | 101 |
-| ✅ Pass (GUI skills) | 1 |
+| ✅ Pass (GUI skills) | 2 |
 | ❌ Fail (GUI skills) | 0 |
-| 🔲 Not yet re-run | 100 |
-| **Pass rate (attempted)** | **1/1** (100%) |
-| **Pass rate (total)** | **1/101** (1.0%) |
+| 🔲 Not yet re-run | 99 |
+| **Pass rate (attempted)** | **2/2** (100%) |
+| **Pass rate (total)** | **2/101** (2.0%) |
 
 > ⚠️ **Full reset on 2026-03-30 02:07 HKT**: Re-running all 101 tasks using full GUI skills pipeline (OBSERVE → LEARN → ACT → VERIFY → SAVE). Previous run (48/61 pass, 78.7%) used mostly CLI shortcuts. Old results preserved below as reference — all marked 🔲 until re-run with GUI skills.
 
@@ -25,7 +25,7 @@
 | # | Task ID | Instruction | Score | Status | Notes |
 |---|---------|-------------|-------|--------|-------|
  | 1 | `2b9493d7` | Hey, my LibreOffice Writer seems to have frozen and I can't get it to close norm | 1.0 | ✅ | GUI skills: screenshot → detect terminal → click → type killall → verify | 
- | 2 | `2c9fc0de` | Could you help me push the changes from commandline in current project to origin | — | 🔲 | prev: 1.0 ✅ — git add -A + commit "daily update" + push origin main | 
+ | 2 | `2c9fc0de` | Could you help me push the changes from commandline in current project to origin | 1.0 | ✅ | GUI: click terminal → type git add/commit/push → Enter → verified | 
  | 3 | `2fe4b718` | Could you help me create an Animated GIF src_clip.gif from a video file using VL | — | 🔲 | prev: 0.75 ✅ — ffmpeg → GIF (image similarity 75%) | 
  | 4 | `3680a5ee` | I have file1.xlsx and file2.ods on my Desktop, each containing a single column. | — | 🔲 | prev: 1.0 ✅ — Tab-separated CSV merge via gnome-terminal + LO headless | 
  | 5 | `46407397` | Help me export charts, graph or other images from docx files received in email " | — | 🔲 | prev: 0.0 ❌ — setup_failed: Google Drive credentials missing | 
