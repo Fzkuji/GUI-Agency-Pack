@@ -1,26 +1,13 @@
 {
   "app": "libreoffice-calc",
   "domain": "",
-  "detect_count": 1,
-  "last_updated": "2026-03-29 11:52:23",
+  "detect_count": 0,
+  "last_updated": "",
   "img_size": [
     1920,
     922
   ],
   "forget_threshold": 15,
-  "pages": {
-    "empty_spreadsheet": {
-      "components": [
-        "File",
-        "Save",
-        "Open",
-        "A1",
-        "fx",
-        "Sheet"
-      ],
-      "learned_at": "2026-03-28 22:09:18"
-    }
-  },
   "tips": [
     "Cell navigation: click Name Box (~91,184) → Ctrl+A → type cell ref (A2) → Enter",
     "Text input (Linux): use xdotool type --delay 10 \"text\" (not pyautogui.typewrite)",
