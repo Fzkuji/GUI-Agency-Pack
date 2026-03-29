@@ -1,0 +1,37 @@
+{
+  "app": "gnome-terminal",
+  "domain": "",
+  "detect_count": 1,
+  "last_updated": "2026-03-30 02:55:47",
+  "img_size": [
+    1920,
+    922
+  ],
+  "forget_threshold": 15,
+  "pages": {
+    "vm_test": {
+      "components": [
+        "mM",
+        "Activilses",
+        "mM",
+        "mM",
+        "-）",
+        "-）",
+        "Activilses",
+        "unlabeled_34_133",
+        "unlabeled_34_201",
+        "unlabeled_33_269",
+        "unlabeled_30_336",
+        "unlabeled_33_405",
+        "unlabeled_32_473",
+        "unlabeled_33_541",
+        "unlabeled_33_609",
+        "unlabeled_33_675",
+        "unlabeled_34_744",
+        "unlabeled_33_815",
+        "unlabeled_33_884"
+      ],
+      "learned_at": "2026-03-30 02:55:47"
+    }
+  }
+}

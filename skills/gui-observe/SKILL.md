@@ -37,31 +37,46 @@ Use template matching instead of full detection:
 3. If state is known → proceed with `click_component` (no GPA-GUI-Detector needed)
 4. If state is unknown → Phase 1 (full observation)
 
-## Coordinate System (Dual-Space)
+## Coordinate System — ImageContext
 
-Two coordinate spaces:
-- **Detection space** = screenshot pixels (GPA, OCR, template match, cv2 crops)
-- **Click space** = OS logical pixels (gui_action.py click)
+`detect_all()` returns **image pixel coordinates** (raw detection output).
+Callers create an `ImageContext` to convert to screen click coordinates.
+Cropping uses image pixel coords directly — **no conversion needed**.
 
-Mapping functions (in `ui_detector.py`):
-- `detect_to_click(x, y)` — detection → click
-- `click_to_detect(x, y)` — click → detection (for image cropping)
+### ImageContext (in `ui_detector.py`)
 
-Scale is computed dynamically each time `detect_all()` runs via `refresh_screen_info()`.
+```python
+from scripts.ui_detector import ImageContext
 
-| Tool | Space |
-|------|-------|
-| detect_icons | detection |
-| detect_text | detection |
-| template_match raw | detection |
-| detect_all output | **click** |
-| gui_action.py click | click |
-| cv2 image crop | detection |
+ctx = ImageContext.mac_fullscreen()      # Mac screencapture fullscreen
+ctx = ImageContext.mac_window(wx, wy)    # Mac window screenshot (win pos in click-space)
+ctx = ImageContext.remote()              # VM / remote / downloaded image (1:1)
 
-- **Mac Retina**: detection space is 2× click space (e.g., 3024×1964 vs 1512×982)
-- **Remote VMs (OSWorld)**: 1920×1080, scale = 1:1 (detection == click)
-- **Templates**: saved in detection-space pixels
-- **Window validation**: match position converted to click space, checked against `get_window_bounds()`
+# Image pixels → screen click coords
+click_x, click_y = ctx.image_to_click(el["cx"], el["cy"])
+
+# Screen click coords → image pixels (for cropping)
+px_x, px_y = ctx.click_to_image(click_x, click_y)
+```
+
+### How it works
+
+`ImageContext` knows two things:
+1. **pixel_scale** — image pixels per click-space unit (from `backingScaleFactor`: Retina=2.0, else 1.0)
+2. **origin** — image top-left in screen click-space (fullscreen=(0,0), window=(win_x, win_y))
+
+| Source | Coordinates |
+|--------|------------|
+| detect_all output | **image pixels** |
+| detect_icons / detect_text | image pixels |
+| cv2 image crop | image pixels |
+| gui_action.py click | click-space (use `ctx.image_to_click()`) |
+| template_match raw | image pixels |
+
+- **Mac Retina**: pixel_scale=2.0 (e.g., 3024×1964 image, 1512×982 click-space)
+- **Mac non-Retina**: pixel_scale=1.0
+- **Remote VMs**: pixel_scale=1.0, origin=(0,0)
+- **Templates**: saved in image pixel coordinates
 
 ## State Detection
 

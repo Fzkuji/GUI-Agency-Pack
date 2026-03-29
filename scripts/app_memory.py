@@ -1655,10 +1655,8 @@ def learn_app(app_name, page_name=None):
                 break
 
         # --- Crop icon from screenshot image ---
-        # detect_all returns click-space coords; convert back to detection space for cropping
-        from ui_detector import click_to_detect
-        px_x, px_y = click_to_detect(el["x"], el["y"])
-        px_w, px_h = click_to_detect(el["w"], el["h"])
+        # detect_all returns image pixel coords — use directly for cropping
+        px_x, px_y, px_w, px_h = el["x"], el["y"], el["w"], el["h"]
         pad = 4
         y1 = max(0, px_y - pad)
         x1 = max(0, px_x - pad)
@@ -1841,8 +1839,6 @@ def learn_site(app_name="Google Chrome", page_name="main"):
     dup_count = 0
     icons_dir = site_dir / "components"
 
-    from ui_detector import click_to_detect
-
     for el in all_elements:
         if el.get("label"):
             comp_name = el["label"].replace(" ", "_").replace("/", "-")[:30]
@@ -1855,7 +1851,7 @@ def learn_site(app_name="Google Chrome", page_name="main"):
                 rel_y = el["cy"]
                 comp_name = f"unlabeled_{rel_x}_{rel_y}"
 
-        # Dedup by position (coords already click-space from detect_all)
+        # Dedup by position (coords are image pixel coords from detect_all)
         is_new = True
         for existing_name, existing in components.items():
             if (abs(existing.get("rel_x", 0) - el["cx"]) < 15 and
@@ -1864,9 +1860,8 @@ def learn_site(app_name="Google Chrome", page_name="main"):
                 comp_name = existing_name
                 break
 
-        # Crop from screenshot image (convert click-space → detection space)
-        px_x, px_y = click_to_detect(el["x"], el["y"])
-        px_w, px_h = click_to_detect(el["w"], el["h"])
+        # Crop from screenshot image — detect_all returns image pixel coords, use directly
+        px_x, px_y, px_w, px_h = el["x"], el["y"], el["w"], el["h"]
         pad = 4
         y1, x1 = max(0, px_y-pad), max(0, px_x-pad)
         y2 = min(img.shape[0], px_y+px_h+pad)
@@ -1950,10 +1945,8 @@ def learn_from_screenshot(img_path, domain=None, app_name="chromium", page_name=
         return {"saved": 0, "components": []}
 
     img_h, img_w = img.shape[:2]
-    # detect_all() handles all coordinate conversion internally (detection → click space).
-    # Elements returned are already in click space. For cropping, use click_to_detect().
-    # The `retina` parameter is DEPRECATED and ignored.
-    from ui_detector import click_to_detect
+    # detect_all() returns IMAGE PIXEL coordinates (no conversion).
+    # Cropping uses these coords directly. For clicking, use ImageContext.
 
     # Auto-generate page_name from domain + timestamp if not provided
     if not page_name:
@@ -2031,13 +2024,13 @@ def learn_from_screenshot(img_path, domain=None, app_name="chromium", page_name=
                 comp_name = existing_name
                 break
 
-        # Crop from screenshot (convert click-space → detection-space for pixel access)
-        det_x, det_y = click_to_detect(el["x"], el["y"])
-        det_w, det_h = click_to_detect(w, h)
+        # Crop from screenshot — detect_all returns image pixel coords, use directly
+        px_x, px_y = el["x"], el["y"]
+        px_w, px_h = w, h
         pad = 4
-        y1, x1 = max(0, det_y - pad), max(0, det_x - pad)
-        y2 = min(img.shape[0], det_y + det_h + pad)
-        x2 = min(img.shape[1], det_x + det_w + pad)
+        y1, x1 = max(0, px_y - pad), max(0, px_x - pad)
+        y2 = min(img.shape[0], px_y + px_h + pad)
+        x2 = min(img.shape[1], px_x + px_w + pad)
         crop = img[y1:y2, x1:x2]
         if crop.size == 0:
             continue

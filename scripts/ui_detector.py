@@ -24,96 +24,136 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 SKILL_DIR = SCRIPT_DIR.parent
 GPA_MODEL = os.path.expanduser("~/GPA-GUI-Detector/model.pt")
-SCREEN_W = 1512   # Default click-space dimensions, updated by refresh_screen_info()
-SCREEN_H = 982    # Default click-space dimensions, updated by refresh_screen_info()
+SCREEN_W = 1512   # Default click-space dimensions (Mac logical)
+SCREEN_H = 982    # Default click-space dimensions (Mac logical)
 
 # ═══════════════════════════════════════════
-# Coordinate system — dual-space + mapping
+# Coordinate system — ImageContext
 # ═══════════════════════════════════════════
-# Two coordinate spaces:
-#   - Detection space (screencapture pixels): GPA, OCR, template match, cv2 crop
-#   - Click space (OS logical pixels): pynput click_at, pyautogui, osascript bounds
+# detect_all() returns IMAGE PIXEL coordinates (raw detection output).
+# Callers create an ImageContext to convert to click coordinates.
+# Cropping uses image pixel coords directly — no conversion needed.
 #
-# detect_all() is the single exit point — it returns click-space coords.
-# Functions that crop/annotate images must convert back with click_to_detect().
-#
-# Scale is computed dynamically each time detect_all runs (not hardcoded).
+# ImageContext knows two things:
+#   1. pixel_scale: image pixels per click-space unit (Retina=2.0, else 1.0)
+#   2. origin: where the image's top-left corner is in screen click-space
+
+
+class ImageContext:
+    """Maps between image pixel coordinates and screen click coordinates.
+
+    pixel_scale: ratio of image pixels to click-space units.
+        - Mac Retina screencapture: 2.0 (backingScaleFactor)
+        - Mac non-Retina / VM / remote: 1.0
+    origin_x, origin_y: image top-left in screen click-space.
+        - Fullscreen: (0, 0)
+        - Window crop: (window_x, window_y) in click-space
+    """
+
+    def __init__(self, pixel_scale=1.0, origin_x=0, origin_y=0):
+        self.pixel_scale = pixel_scale
+        self.origin_x = origin_x
+        self.origin_y = origin_y
+
+    def image_to_click(self, ix, iy):
+        """Image pixel coords → screen click coords."""
+        return (
+            int(ix / self.pixel_scale) + self.origin_x,
+            int(iy / self.pixel_scale) + self.origin_y,
+        )
+
+    def click_to_image(self, cx, cy):
+        """Screen click coords → image pixel coords (for cropping)."""
+        return (
+            int((cx - self.origin_x) * self.pixel_scale),
+            int((cy - self.origin_y) * self.pixel_scale),
+        )
+
+    def image_size_to_click(self, pw, ph):
+        """Image pixel dimensions → click-space dimensions."""
+        return int(pw / self.pixel_scale), int(ph / self.pixel_scale)
+
+    def click_size_to_image(self, cw, ch):
+        """Click-space dimensions → image pixel dimensions."""
+        return int(cw * self.pixel_scale), int(ch * self.pixel_scale)
+
+    @classmethod
+    def mac_fullscreen(cls):
+        """Mac full-screen screenshot (screencapture without -l)."""
+        return cls(pixel_scale=_get_backing_scale_factor(), origin_x=0, origin_y=0)
+
+    @classmethod
+    def mac_window(cls, win_x=0, win_y=0):
+        """Mac window screenshot. win_x/win_y = window position in click-space."""
+        return cls(pixel_scale=_get_backing_scale_factor(),
+                   origin_x=win_x, origin_y=win_y)
+
+    @classmethod
+    def remote(cls):
+        """Remote VM or downloaded image. 1:1, no offset."""
+        return cls(pixel_scale=1.0, origin_x=0, origin_y=0)
+
+    def __repr__(self):
+        return (f"ImageContext(pixel_scale={self.pixel_scale}, "
+                f"origin=({self.origin_x}, {self.origin_y}))")
+
+
+def _get_backing_scale_factor():
+    """Get Mac display backing scale factor (2.0 for Retina, 1.0 otherwise).
+
+    Uses NSScreen.main.backingScaleFactor via Swift.
+    Non-Mac environments return 1.0.
+    """
+    import platform as _plat
+    if _plat.system() != "Darwin":
+        return 1.0
+    try:
+        r = subprocess.run(
+            ["swift", "-e", 'import AppKit; print(NSScreen.main!.backingScaleFactor)'],
+            capture_output=True, text=True, timeout=10
+        )
+        return float(r.stdout.strip())
+    except Exception:
+        return 2.0  # Safe default for Mac Retina
+
+
+# ── Legacy compat shims ──
+# These are DEPRECATED. Use ImageContext directly.
+# Kept so old code doesn't crash; will be removed later.
 
 _screen_info = {
-    "detect_w": None, "detect_h": None,  # screenshot pixel dimensions
-    "click_w": None, "click_h": None,    # OS logical dimensions
-    "scale_x": 1.0, "scale_y": 1.0,     # detect / click
+    "detect_w": None, "detect_h": None,
+    "click_w": None, "click_h": None,
+    "scale_x": 1.0, "scale_y": 1.0,
 }
 
 
 def refresh_screen_info(img_w=None, img_h=None):
-    """Update screen info. Called by detect_all() each time.
-
-    img_w/img_h: current screenshot pixel dimensions (from detect_icons).
-    Click-space dimensions are obtained from the OS:
-      - Mac: NSScreen.main.frame.width/height (logical)
-      - Linux: xdpyinfo dimensions
-      - Fallback: assume 1:1 (scale = 1.0)
-    """
+    """DEPRECATED — legacy compat. Sets scale from backingScaleFactor."""
     global _screen_info
-    import platform as _plat
-
-    if img_w and img_h:
-        _screen_info["detect_w"] = img_w
-        _screen_info["detect_h"] = img_h
-
-    click_w, click_h = img_w, img_h  # fallback 1:1
-
-    if _plat.system() == "Darwin":
-        try:
-            r = subprocess.run(
-                ["swift", "-e",
-                 'import AppKit; let s=NSScreen.main!; '
-                 'print("\\(Int(s.frame.width)) \\(Int(s.frame.height))")'],
-                capture_output=True, text=True, timeout=10
-            )
-            parts = r.stdout.strip().split()
-            if len(parts) == 2:
-                click_w, click_h = int(parts[0]), int(parts[1])
-        except Exception:
-            pass  # keep fallback
-    elif _plat.system() == "Linux":
-        try:
-            r = subprocess.run(["xdpyinfo"], capture_output=True, text=True, timeout=5)
-            for line in r.stdout.split('\n'):
-                if 'dimensions:' in line:
-                    dims = line.split(':')[1].strip().split()[0]
-                    click_w, click_h = map(int, dims.split('x'))
-                    break
-        except Exception:
-            pass  # keep fallback
-
-    _screen_info["click_w"] = click_w
-    _screen_info["click_h"] = click_h
-
-    if img_w and click_w and click_w > 0:
-        _screen_info["scale_x"] = img_w / click_w
-    else:
-        _screen_info["scale_x"] = 1.0
-
-    if img_h and click_h and click_h > 0:
-        _screen_info["scale_y"] = img_h / click_h
-    else:
-        _screen_info["scale_y"] = 1.0
+    scale = _get_backing_scale_factor()
+    _screen_info["detect_w"] = img_w
+    _screen_info["detect_h"] = img_h
+    _screen_info["click_w"] = int(img_w / scale) if img_w else None
+    _screen_info["click_h"] = int(img_h / scale) if img_h else None
+    _screen_info["scale_x"] = scale
+    _screen_info["scale_y"] = scale
 
 
 def detect_to_click(x, y):
-    """Detection-space coordinates → click-space coordinates."""
-    return int(x / _screen_info["scale_x"]), int(y / _screen_info["scale_y"])
+    """DEPRECATED — use ImageContext.image_to_click()."""
+    s = _screen_info["scale_x"] if _screen_info["scale_x"] != 1.0 else _get_backing_scale_factor()
+    return int(x / s), int(y / s)
 
 
 def click_to_detect(x, y):
-    """Click-space coordinates → detection-space coordinates (for image cropping)."""
-    return int(x * _screen_info["scale_x"]), int(y * _screen_info["scale_y"])
+    """DEPRECATED — use ImageContext.click_to_image()."""
+    s = _screen_info["scale_x"] if _screen_info["scale_x"] != 1.0 else _get_backing_scale_factor()
+    return int(x * s), int(y * s)
 
 
 def get_screen_info():
-    """Return a copy of the current screen info dict."""
+    """DEPRECATED — Return a copy of the current screen info dict."""
     return dict(_screen_info)
 
 
@@ -548,24 +588,12 @@ def detect_all(img_path, conf=0.1, iou=0.3):
         # OCR may not be available on non-Mac platforms — that's OK
         pass
 
-    merged = merge_elements(icons, texts)  # detection space
+    merged = merge_elements(icons, texts)  # image pixel coordinates
 
-    # ── Unified coordinate conversion: detection space → click space ──
-    # merged contains all elements (icons/texts are views into merged objects),
-    # so converting merged converts them all exactly once.
-    refresh_screen_info(img_w, img_h)
-    info = get_screen_info()
-    if info["scale_x"] != 1.0 or info["scale_y"] != 1.0:
-        coord_keys = ("cx", "cy", "x", "y", "w", "h")
-        converted = set()
-        for el in merged:
-            eid = id(el)
-            if eid in converted:
-                continue
-            converted.add(eid)
-            for k in coord_keys:
-                if k in el:
-                    el[k] = int(el[k] / info["scale_x"])  # scale_x ≈ scale_y typically
+    # ── No coordinate conversion here ──
+    # detect_all returns IMAGE PIXEL coordinates.
+    # Callers use ImageContext to convert to click-space when needed.
+    # Cropping uses image pixel coords directly — no conversion needed.
 
     # Auto-tick tracker (best-effort, never fail)
     try:
@@ -661,25 +689,14 @@ def merge_elements(icon_elements, text_elements, ax_elements=None, iou_threshold
 def annotate_image(img_path, elements, out_path=None, retina_scale=2):
     """Draw bounding boxes and labels on image.
 
-    Elements may be in click-space coordinates if they came from detect_all().
-    The function auto-scales them back to detection space for drawing using
-    click_to_detect(). The retina_scale parameter is DEPRECATED.
+    Elements are in image pixel coordinates (from detect_all).
+    No coordinate conversion needed — draw directly.
     """
     import cv2
 
     img = cv2.imread(img_path)
     if img is None:
         return None
-
-    # Auto-detect if coordinates need scaling up for annotation.
-    # If elements are in click-space (from detect_all), scale them up.
-    # Heuristic: if image width > 1.5x the max element x+w, coords are click-space.
-    info = get_screen_info()
-    needs_upscale = False
-    if info["scale_x"] != 1.0 and elements:
-        max_right = max((el.get("x", 0) + el.get("w", 0)) for el in elements) if elements else 0
-        if max_right > 0 and img.shape[1] / max_right > 1.5:
-            needs_upscale = True
 
     colors = {
         "icon": (0, 255, 0),       # green
@@ -689,13 +706,7 @@ def annotate_image(img_path, elements, out_path=None, retina_scale=2):
     }
 
     for el in elements:
-        if needs_upscale:
-            x = int(el["x"] * info["scale_x"])
-            y = int(el["y"] * info["scale_y"])
-            w = int(el["w"] * info["scale_x"])
-            h = int(el["h"] * info["scale_y"])
-        else:
-            x, y, w, h = el["x"], el["y"], el["w"], el["h"]
+        x, y, w, h = el["x"], el["y"], el["w"], el["h"]
         color = colors.get(el["type"], (255, 255, 255))
         cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
 
@@ -770,15 +781,16 @@ def detect_all_mac(app_name=None, fullscreen=False, include_ax=False,
     # 6. Annotate (must use detection-space coords — annotation draws on raw image)
     annotated_path = annotate_image(img_path, all_elements)
 
-    # 7. Convert all coordinates to click space
-    refresh_screen_info(img_w, img_h)
-    info = get_screen_info()
-    if info["scale_x"] != 1.0 or info["scale_y"] != 1.0:
+    # 7. Convert all coordinates to click space (Mac-specific function)
+    # NOTE: detect_all_mac returns click-space coords for direct use with pynput.
+    # This is different from detect_all() which returns image pixel coords.
+    scale = _get_backing_scale_factor()
+    if scale != 1.0:
         coord_keys = ("cx", "cy", "x", "y", "w", "h")
         for el in all_elements:
             for k in coord_keys:
                 if k in el:
-                    el[k] = int(el[k] / info["scale_x"])
+                    el[k] = int(el[k] / scale)
 
     return all_elements, img_path, annotated_path
 

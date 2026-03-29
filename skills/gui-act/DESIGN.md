@@ -69,36 +69,51 @@ DETECT → MATCH → SAVE → EXECUTE → DETECT AGAIN → DIFF → SAVE TRANSIT
 - Mac: screencapture → 检测在本地跑
 - VM: 通过 HTTP API 下载截图 → 检测在 Mac 上跑 → 点击指令发回 VM
 
-坐标转换现在由双空间系统自动处理：
-- `detect_all()` 调用 `refresh_screen_info()` 动态计算 scale
-- `detect_to_click(x, y)` / `click_to_detect(x, y)` 处理空间转换
-- Mac Retina：检测空间 ≈ 2× 点击空间
-- VM：scale = 1:1
-- 不再需要手动传 `retina` 参数
+## 坐标系统 — ImageContext
 
-## 坐标系统
+`detect_all()` 返回**图片像素坐标**（原始检测输出，不做转换）。
+调用者通过 `ImageContext` 将像素坐标转为屏幕点击坐标。
 
-两个坐标空间：
-- 检测空间（screencapture 像素）：GPA、OCR、模板匹配、cv2 图片裁剪
-- 点击空间（OS logical）：pynput、pyautogui、osascript 窗口边界
+```python
+from scripts.ui_detector import ImageContext
 
-映射函数（在 `ui_detector.py`）：
-- `detect_to_click(x, y)`: 检测 → 点击
-- `click_to_detect(x, y)`: 点击 → 检测
-- `refresh_screen_info(img_w, img_h)`: 每次 detect_all 时更新
-- `get_screen_info()`: 获取当前屏幕信息
+ctx = ImageContext.mac_fullscreen()      # Mac 全屏截图
+ctx = ImageContext.mac_window(wx, wy)    # Mac 窗口截图（窗口位置）
+ctx = ImageContext.remote()              # VM / 远程截图（1:1）
 
-每个工具的空间：
-| 工具 | 空间 |
-|------|------|
-| detect_icons | 检测 |
-| detect_text | 检测 |
-| template_match | 检测 |
-| detect_all 输出 | 点击 |
-| pynput click_at | 点击 |
-| cv2 图片裁剪 | 检测 |
+click_x, click_y = ctx.image_to_click(px_x, px_y)  # 像素 → 点击
+px_x, px_y = ctx.click_to_image(click_x, click_y)   # 点击 → 像素
+```
 
-scale 在 detect_all 调用时动态计算（`refresh_screen_info`），不硬编码。
+### ImageContext 的两个参数
+
+1. **pixel_scale** — 图片像素 / 点击坐标的比值
+   - Mac Retina: 2.0（`backingScaleFactor`）
+   - Mac 非 Retina / VM: 1.0
+2. **origin** — 图片左上角在屏幕中的点击坐标
+   - 全屏: (0, 0)
+   - 窗口截图: (window_x, window_y)
+
+### 每个工具的坐标空间
+
+| 工具 | 返回坐标 |
+|------|---------|
+| detect_icons | 图片像素 |
+| detect_text | 图片像素 |
+| detect_all 输出 | **图片像素** |
+| template_match | 图片像素 |
+| cv2 图片裁剪 | 图片像素 |
+| pynput / pyautogui | 点击空间（用 `ctx.image_to_click()` 转换）|
+
+### 为什么裁剪不会出错
+
+- 检测返回图片像素 → 直接用来裁剪 → 坐标系一致 → 永远正确
+- 旧设计的 bug：检测 → 转成点击坐标 → 裁剪时再转回像素 → 转换不对 → 错
+
+### Legacy 兼容
+
+旧函数 `detect_to_click()` / `click_to_detect()` 仍可用（已修正为使用 `backingScaleFactor`），
+但新代码应使用 `ImageContext`。
 
 ## 操作前后验证
 

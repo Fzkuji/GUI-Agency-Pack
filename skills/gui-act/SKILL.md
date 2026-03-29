@@ -193,30 +193,33 @@ This automatically: runs OCR on both images, diffs them, saves states + transiti
 
 ## Concrete Example: OSWorld Task
 
-```
-# Step 1: Screenshot + detect
-screenshot → download to Mac → OCR finds "Travel info" at (779, 187)
+```python
+from scripts.ui_detector import ImageContext, detect_all
+
+# Step 1: Screenshot + detect (returns IMAGE PIXEL coords)
+# Download VM screenshot to Mac, then detect locally
+elements = detect_all("screenshot.png")  # returns image pixel coords
 
 # Step 2: Match — first visit, no memory yet → all new
 
 # Step 3: Save components BEFORE clicking
 learn_from_screenshot("screenshot.png", domain="united.com", page_name="homepage")
-→ 42 components saved automatically
+# → 42 components saved automatically (crops use pixel coords directly)
 
-# Step 4: Click
-pyautogui.click(779, 187)  # via VM API
+# Step 4: Click — convert pixel coords to click-space
+ctx = ImageContext.remote()  # VM screenshot = 1:1
+click_x, click_y = ctx.image_to_click(779, 187)  # → (779, 187) for remote
+pyautogui.click(click_x, click_y)  # via VM API
 
 # Step 5: Detect again
-new_screenshot → download to Mac → OCR finds dropdown menu
+new_elements = detect_all("new_screenshot.png")
 
 # Step 6+7: Diff + save transition
 record_page_transition("screenshot.png", "new_screenshot.png",
                        click_label="Travel_info", click_pos=(779, 187),
                        domain="united.com")
-→ appeared: ["Bags", "United app", ...], disappeared: [...]
-→ transition saved to transitions.json
-
-# Now repeat steps 1-7 for clicking "Bags"...
+# → appeared: ["Bags", "United app", ...], disappeared: [...]
+# → transition saved to transitions.json
 ```
 
 ---
@@ -241,11 +244,25 @@ Screenshot → template match against saved components → instant recognition
 
 ## How Coordinates Work
 
-| Source | Method | Precision |
+`detect_all()` returns **image pixel coordinates**. Use `ImageContext` to convert to click-space:
+
+```python
+from scripts.ui_detector import ImageContext
+
+# Choose context based on screenshot source:
+ctx = ImageContext.remote()              # VM / remote screenshots
+ctx = ImageContext.mac_fullscreen()      # Mac fullscreen
+ctx = ImageContext.mac_window(wx, wy)    # Mac window crop
+
+# Convert for clicking:
+click_x, click_y = ctx.image_to_click(el["cx"], el["cy"])
+```
+
+| Source | Method | Returns |
 |---|---|---|
-| Saved component | Template matching (`match_all_components`) | Pixel-precise |
-| Text element | OCR (`detect_text`) | Bbox-precise |
-| UI component | GPA-GUI-Detector (`detect_icons`) | Bbox-precise |
+| Saved component | Template matching (`match_all_components`) | Click-space (already converted) |
+| Text element | OCR via `detect_all()` | **Image pixels** → use `ctx.image_to_click()` |
+| UI component | GPA via `detect_all()` | **Image pixels** → use `ctx.image_to_click()` |
 | **image tool** | **NEVER for coordinates** | **Understanding only** |
 
 ## Not Found?
