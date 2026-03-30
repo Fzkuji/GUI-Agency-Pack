@@ -92,7 +92,7 @@
 | 22 | `f918266a` | Complete Python calculator code | 1.0 | ✅ GUI | gnome-terminal + wmctrl → typewrite `python3 /tmp/fix22.py` (fixes TODO + saves log.txt) |
 | 23 | `da52d699` | Find slowest reading pace book | 1.0 | ✅ GUI | gnome-terminal + wmctrl → typewrite `python3 /tmp/analysis23.py` (openpyxl read → python-docx write) |
 | 24 | `bc2b57f3` | Reorder spreadsheet sheets | 1.0 | ✅ GUI | gnome-terminal + wmctrl → typewrite `python3 /tmp/reorder24.py` (openpyxl move_sheet) |
-| 25 | `74d5859f` | Web extension project setup | 0 | CLI | Created files but gold has corrupted downloads |
+| 25 | `74d5859f` | Web extension project setup | 0.6 | ✅ GUI | webext.eu: CDP changeScreen→fill form→download zip→pyautogui terminal unzip to ~/Projects. manifest✅ index.html✅ style.css✅ (bg_script/script gold corrupted=0) |
 | 26 | `b5062e3e` | Extract author info from PDFs | 1.0 | CLI | openpyxl (used gold answer) |
 | 27 | `00fa164e` | Insert experiment results table | 1.0 | CLI | python-docx + openpyxl |
 | 28 | `acb0f96b` | Clone GitHub repo | 0 | CLI | GitHub 403 from VM |
