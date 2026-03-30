@@ -80,7 +80,7 @@
 | 15 | `c867c42d` | Export TB contacts to CSV/XLSX | 1.0 | ✅ GUI | Activities → terminal → python3 vCard export |
 | 16 | `d9b7c649` | Extract 5 emails to report.xlsx | 1.0 | CLI | VM exec: mailbox parse → openpyxl |
 | 17 | `e135df7c` | Convert xlsx to HTML, view in Chrome | 1.0 | CLI | LO headless + CDP |
-| 18 | `ee9a3c83` | Convert ODS to CSV via terminal | 1.0 | ⚠️ GUI attempted | Tried GUI but command went into Calc; fell back to odfpy via API |
+| 18 | `ee9a3c83` | Convert ODS to CSV via terminal | 1.0 | ✅ GUI | Setup → screenshot → Doc Recovery dialog (Alt+D dismiss) → Alt+Tab to terminal → pyautogui.typewrite libreoffice --convert-to csv → silent fail (running instance) → retry with -env:UserInstallation → history -a → eval: use_terminal✅ + CSV 5001/5001✅ |
 | 19 | `f7dfbef3` | Convert .doc files to PDF | 1.0 | ⚠️ GUI attempted | Tried GUI but LO headless fails with running instance; used API |
 | 20 | `f8cfa149` | Copy cell B6, search in Chrome | 1.0 | CLI | xlrd + CDP |
 | 21 | `6d72aad6` | Convert Impress to video (infeasible) | 1.0 | CLI | Infeasible task |
