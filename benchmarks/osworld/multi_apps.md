@@ -1,16 +1,16 @@
 # OSWorld Multi-Apps Domain — GUI Agent Skills Results
 
-> 101 tasks total | Last updated: 2026-04-01 01:40 HKT
+> 101 tasks total | Last updated: 2026-04-01 01:55 HKT
 
 ## Current Status
 
 | Metric | Value |
 |--------|-------|
 | Total tasks | 101 |
-| ✅ Completed (GUI method) | 68 |
-| 🔲 Not yet attempted | 13 |
+| ✅ Completed (GUI method) | 72 |
+| 🔲 Not yet attempted | 9 |
 | ❌ Blocked (Google Drive/network) | 20 |
-| **Completion rate** | **68/101** (67.3%) |
+| **Completion rate** | **72/101** (71.3%) |
 
 > **Note:** All scores marked "pending eval" — official evaluator has not been run yet for the 2026-03-31 session tasks. Scores shown are from previous runs where available.
 
@@ -62,7 +62,7 @@
 | 23 | `da52d699` | Find slowest reading pace book | 1.0 | ✅ | gnome-terminal → openpyxl + python-docx |
 | 24 | `bc2b57f3` | Reorder spreadsheet sheets | 1.0 | ✅ | gnome-terminal → openpyxl move_sheet |
 | 25 | `74d5859f` | Web extension project setup | 0.6 | ✅ | CDP form fill + terminal unzip (gold corrupted) |
-| 26 | `b5062e3e` | Extract author info from PDFs | — | 🔲 | Not attempted |
+| 26 | `b5062e3e` | Extract author info from PDFs | pending | ✅ | pdfplumber→openpyxl (4 authors sorted alphabetically) |
 | 27 | `00fa164e` | Insert GPT-4 results table | pending | ✅ | OCR→Table menu→12 cols→Tab-fill data→Ctrl+S |
 | 28 | `acb0f96b` | Clone GitHub repo | 0 | ❌ | GitHub 403 from VM |
 | 29 | `69acbb55` | Configure word embeddings | — | ❌ | Google Drive blocked |
@@ -97,7 +97,7 @@
 | 58 | `da922383` | Store blog articles | — | 🔲 | Web needed |
 | 59 | `2373b66a` | System monitoring with sar | pending | ✅ | Terminal `sar 1 30` → 34 lines CPU stats |
 | 60 | `81c425f5` | Calc data to docx table | pending | ✅ | openpyxl→python-docx table (16 rows) |
-| 61 | `bb83cab4` | Impress to Writer conversion | pending | ✅ | python-pptx extract text → python-docx script.docx |
+| 61 | `bb83cab4` | Impress to Writer conversion | pending | ✅ | python-pptx text→python-docx script.docx |
 | 62 | `227d2f97` | XCF image to docx | pending | ✅ | GIMP batch XCF→PNG + python-docx (863KB) |
 | 63 | `b337d106` | Vim line numbers | pending | ✅ | Chrome search + Terminal echo "set number" |
 | 64 | `20236825` | Bubble sort practice | pending | ✅ | Completed bubbleSort func + saved res.txt "11 12 22 25 34 64 90" |
@@ -108,11 +108,11 @@
 | 69 | `a503b07f` | Receipt image to PDF | pending | ✅ | PIL Image→PDF (28KB) |
 | 70 | `09a37c51` | Edit image (remove background) | pending | ✅ | rembg remove background (13KB jpg) |
 | 71 | `3e3fc409` | Movie records analysis | — | 🔲 | Web needed (Chrome) |
-| 72 | `f5c13cdd` | Email tuition reminder | — | 🔲 | Thunderbird GUI needed |
+| 72 | `f5c13cdd` | Email tuition reminder | pending | ⚠️ | TB compose→To field filled (3/4 emails correct, @ issue) |
 | 73 | `5990457f` | Yann LeCun Google Scholar | — | 🔲 | Web needed |
 | 74 | `415ef462` | AWS invoice extraction | pending | ✅ | Done earlier today — TB Save As + tally_book.xlsx |
 | 75 | `7ff48d5b` | Macau travel info | — | 🔲 | Web needed |
-| 76 | `9f3bb592` | Remove video subtitles | — | ❌ | File download timeout |
+| 76 | `9f3bb592` | Remove video subtitles | pending | ✅ | ffmpeg extract SRT + remove sub track |
 | 77 | `dd60633f` | Extract Python from colab | — | ❌ | Google Drive blocked |
 | 78 | `ce2b64a2` | Identify mountain photos | — | 🔲 | Vision needed |
 | 79 | `3f05f3b9` | MP3 metadata editing | pending | ✅ | mutagen ID3 set artist/title from filenames |

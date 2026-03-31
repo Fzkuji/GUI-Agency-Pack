@@ -1,8 +1,8 @@
 {
   "app": "gnome_terminal",
   "domain": "",
-  "detect_count": 7,
-  "last_updated": "2026-04-01 01:33:14",
+  "detect_count": 9,
+  "last_updated": "2026-04-01 01:40:16",
   "img_size": [
     1920,
     922
@@ -212,6 +212,53 @@
         "unlabeled_33_884"
       ],
       "learned_at": "2026-04-01 01:33:13"
+    },
+    "authors_extracted": {
+      "components": [
+        "-）",
+        "-）",
+        "Activilies",
+        "unlabeled_34_132",
+        "unlabeled_34_201",
+        "unlabeled_35_268",
+        "unlabeled_33_336",
+        "unlabeled_34_405",
+        "unlabeled_33_540",
+        "unlabeled_33_609",
+        "unlabeled_33_675",
+        "unlabeled_34_744",
+        ">_",
+        "Home",
+        "unlabeled_33_884"
+      ],
+      "learned_at": "2026-04-01 01:38:10"
+    },
+    "subtitles_extracted": {
+      "components": [
+        "-）",
+        "-）",
+        "Activilies",
+        "unlabeled_34_132",
+        "ris.py",
+        "unlabeled_799_186",
+        "unlabeled_844_186",
+        "unlabeled_931_186",
+        "unlabeled_971_186",
+        "unlabeled_34_201",
+        "unlabeled_562_222",
+        "unlabeled_616_433",
+        "unlabeled_35_268",
+        "unlabeled_33_336",
+        "unlabeled_34_405",
+        "unlabeled_33_540",
+        "unlabeled_33_609",
+        "unlabeled_33_675",
+        "unlabeled_34_744",
+        ">_",
+        "Home",
+        "unlabeled_33_884"
+      ],
+      "learned_at": "2026-04-01 01:40:14"
     }
   }
 }
