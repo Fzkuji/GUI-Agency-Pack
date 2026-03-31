@@ -1,0 +1,98 @@
+{
+  "app": "gnome_terminal",
+  "domain": "",
+  "detect_count": 3,
+  "last_updated": "2026-04-01 01:20:28",
+  "img_size": [
+    1920,
+    922
+  ],
+  "forget_threshold": 15,
+  "pages": {
+    "tetris_fix_verify": {
+      "components": [
+        "unlabeled_1066_13",
+        "-）",
+        "-）",
+        "Activilies",
+        "unlabeled_34_132",
+        "ris.py",
+        "unlabeled_799_186",
+        "unlabeled_844_186",
+        "unlabeled_889_186",
+        "unlabeled_931_186",
+        "unlabeled_971_186",
+        "unlabeled_34_201",
+        "unlabeled_616_433",
+        "unlabeled_478_301",
+        "unlabeled_35_268",
+        "unlabeled_33_336",
+        "unlabeled_34_405",
+        "unlabeled_33_540",
+        "unlabeled_33_609",
+        "unlabeled_33_675",
+        "unlabeled_33_675",
+        "tetris",
+        "unlabeled_34_744",
+        ">_",
+        "Home",
+        "unlabeled_33_884"
+      ],
+      "learned_at": "2026-04-01 01:09:12"
+    },
+    "invoice_crosscheck": {
+      "components": [
+        "-）",
+        "Activilies",
+        "unlabeled_34_132",
+        "problematic",
+        "ris.py",
+        "unlabeled_799_186",
+        "unlabeled_844_186",
+        "unlabeled_889_186",
+        "unlabeled_931_186",
+        "unlabeled_971_186",
+        "unlabeled_34_201",
+        "unlabeled_616_263",
+        "unlabeled_35_268",
+        "Bank-statement",
+        "unlabeled_620_467",
+        "unlabeled_33_336",
+        "unlabeled_34_405",
+        "unlabeled_33_540",
+        "Invoice_#GES",
+        "unlabeled_33_609",
+        "unlabeled_33_675",
+        "unlabeled_33_675",
+        "tetris",
+        "unlabeled_34_744",
+        ">_",
+        "Home",
+        "unlabeled_33_884"
+      ],
+      "learned_at": "2026-04-01 01:17:15"
+    },
+    "photos_sorted": {
+      "components": [
+        "-）",
+        "-）",
+        "Activilies",
+        "unlabeled_34_132",
+        "unlabeled_34_201",
+        "unlabeled_35_268",
+        "unlabeled_33_336",
+        "unlabeled_34_405",
+        "unlabeled_33_540",
+        "Invoice_#GES",
+        "unlabeled_33_609",
+        "unlabeled_33_675",
+        "tetris",
+        "unlabeled_34_744",
+        ">_",
+        "Home",
+        "unlabeled_33_884"
+      ],
+      "learned_at": "2026-04-01 01:20:26"
+    }
+  }
+}

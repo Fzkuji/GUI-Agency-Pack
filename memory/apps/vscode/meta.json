@@ -1,0 +1,82 @@
+{
+  "app": "vscode",
+  "domain": "",
+  "detect_count": 2,
+  "last_updated": "2026-04-01 01:13:39",
+  "img_size": [
+    1920,
+    922
+  ],
+  "forget_threshold": 15,
+  "pages": {
+    "snake_project": {
+      "components": [
+        "File",
+        "unlabeled_646_86",
+        "File",
+        "unlabeled_690_86",
+        "unlabeled_736_86",
+        "unlabeled_817_86",
+        "unlabeled_777_86",
+        "File",
+        "unlabeled_33_133",
+        "unlabeled_467_337",
+        "unlabeled_92_161",
+        "unlabeled_32_200",
+        "unlabeled_91_208",
+        "Code",
+        "unlabeled_91_257",
+        "unlabeled_35_268",
+        "unlabeled_91_305",
+        "unlabeled_33_336",
+        "unlabeled_1417_386",
+        "unlabeled_33_405",
+        "unlabeled_1418_445",
+        "unlabeled_32_473",
+        "unlabeled_32_541",
+        "unlabeled_33_609",
+        "unlabeled_33_676",
+        "unlabeled_34_744",
+        "unlabeled_33_815",
+        "unlabeled_93_827",
+        "unlabeled_92_876",
+        "unlabeled_32_884"
+      ],
+      "learned_at": "2026-04-01 01:05:42"
+    },
+    "welcome": {
+      "components": [
+        "File",
+        "unlabeled_646_86",
+        "File",
+        "unlabeled_690_86",
+        "unlabeled_736_86",
+        "unlabeled_817_86",
+        "unlabeled_777_86",
+        "File",
+        "unlabeled_33_133",
+        "unlabeled_92_161",
+        "unlabeled_32_200",
+        "unlabeled_91_208",
+        "Code",
+        "unlabeled_91_257",
+        "unlabeled_35_268",
+        "unlabeled_91_305",
+        "unlabeled_33_336",
+        "unlabeled_1417_386",
+        "unlabeled_33_405",
+        "unlabeled_1418_445",
+        "unlabeled_32_473",
+        "unlabeled_32_541",
+        "unlabeled_33_609",
+        "unlabeled_33_676",
+        "unlabeled_34_744",
+        "unlabeled_33_815",
+        "unlabeled_93_827",
+        "unlabeled_92_876",
+        "unlabeled_32_884"
+      ],
+      "learned_at": "2026-04-01 01:13:39"
+    }
+  }
+}

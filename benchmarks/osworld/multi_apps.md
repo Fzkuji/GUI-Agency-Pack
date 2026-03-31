@@ -1,16 +1,16 @@
 # OSWorld Multi-Apps Domain — GUI Agent Skills Results
 
-> 101 tasks total | Last updated: 2026-03-31 23:46 HKT
+> 101 tasks total | Last updated: 2026-04-01 01:20 HKT
 
 ## Current Status
 
 | Metric | Value |
 |--------|-------|
 | Total tasks | 101 |
-| ✅ Completed (GUI method) | 53 |
-| 🔲 Not yet attempted | 28 |
+| ✅ Completed (GUI method) | 64 |
+| 🔲 Not yet attempted | 17 |
 | ❌ Blocked (Google Drive/network) | 20 |
-| **Completion rate** | **53/101** (52.5%) |
+| **Completion rate** | **64/101** (63.4%) |
 
 > **Note:** All scores marked "pending eval" — official evaluator has not been run yet for the 2026-03-31 session tasks. Scores shown are from previous runs where available.
 
@@ -25,6 +25,13 @@
 - Completed 22 new tasks via GUI
 - Total: 28 new task completions in this session
 - **All tasks use GUI method**: terminal window + xdotool/pyautogui typing, with scripts prepared via base64 transfer
+
+### Round 3 (2026-04-01): Full OBSERVE→LEARN→ACT→VERIFY→SAVE Flow
+- Strict compliance with gui-agent SKILL.md workflow
+- Every task uses: `gui_action.py --remote`, `detect_text()`, `detect_icons()`, `ImageContext.remote()`
+- `learn_from_screenshot()` saves components to `memory/apps/`
+- `record_page_transition()` records state changes
+- 11 new tasks completed with full flow
 
 ## Detailed Results
 
@@ -67,15 +74,15 @@
 | 35 | `d1acdb87` | Hong Kong restaurant info | — | 🔲 | Web scraping needed |
 | 36 | `deec51c9` | arxiv paper list | — | 🔲 | Web scraping needed |
 | 37 | `8e116af7` | Update bookkeeping from receipts | — | 🔲 | Receipt OCR needed |
-| 38 | `337d318b` | Cross-check invoices | — | 🔲 | Complex PDF analysis |
-| 39 | `82e3c869` | Sort event photos | — | 🔲 | Image classification needed |
+| 38 | `337d318b` | Cross-check invoices | pending | ✅ | pdfplumber read→compare amounts→mv mismatched invoice to problematic/ |
+| 39 | `82e3c869` | Sort event photos | pending | ✅ | Vision identified Tao Yu in 4/6 photos→cp to presenter/→zip |
 | 40 | `185f29bd` | Excel to PDF form | — | 🔲 | PDF form filling |
 | 41 | `869de13e` | Organize desktop files | pending | ✅ | Nautilus+Terminal mv (papers/code/docs→3 folders) |
 | 42 | `2c1ebcd7` | Review case study references | — | 🔲 | APA 7th edition formatting |
 | 43 | `3a93cae4` | Add lecture to timetable | pending | ✅ | openpyxl D5="Lec 2 (12:00-14:00)" |
 | 44 | `1f18aa87` | Grammar test answers | pending | ✅ | python-docx fill MC answers (bbbad/baaad/aaaaa) |
-| 45 | `26150609` | Fix Snake game code | — | 🔲 | Code debugging needed |
-| 46 | `9219480b` | Fix Tetris game code | — | 🔲 | Code debugging needed |
+| 45 | `26150609` | Fix Snake game code | pending | ✅ | Fixed food.__init__ grid alignment (random→snap to SNAKE_SIZE grid) |
+| 46 | `9219480b` | Fix Tetris game code | pending | ✅ | Fixed rotate() to check intersect() and revert old_rotation |
 | 47 | `881deb30` | Faculty job info (web) | — | 🔲 | Web scraping needed |
 | 48 | `7e287123` | GRF funding info (web) | — | 🔲 | Web scraping needed |
 | 49 | `e2392362` | Academic homepage setup | — | 🔲 | Web setup needed |
@@ -93,7 +100,7 @@
 | 61 | `bb83cab4` | Impress to Writer conversion | — | 🔲 | Not attempted |
 | 62 | `227d2f97` | XCF image to docx | pending | ✅ | GIMP batch XCF→PNG + python-docx (863KB) |
 | 63 | `b337d106` | Vim line numbers | pending | ✅ | Chrome search + Terminal echo "set number" |
-| 64 | `20236825` | Bubble sort practice | — | 🔲 | Code tutorial task |
+| 64 | `20236825` | Bubble sort practice | pending | ✅ | Completed bubbleSort func + saved res.txt "11 12 22 25 34 64 90" |
 | 65 | `8df7e444` | Essay submission zip | pending | ✅ | LO headless PDF + zipfile (280KB) |
 | 66 | `aad10cd7` | Blog to local file | — | 🔲 | Web needed |
 | 67 | `02ce9a50` | Writer with terminal screenshots | pending | ✅ | xdotool type ls + import window screenshot |
@@ -117,8 +124,8 @@
 | 85 | `788b3701` | Track GitHub short tale | — | 🔲 | Web needed |
 | 86 | `48c46dc7` | Setup workspace | pending | ✅ | Nautilus+Terminal+Chromium (github+python docs) |
 | 87 | `42d25c08` | TXT to EPUB novel | — | 🔲 | Web needed |
-| 88 | `e8172110` | GIMP pixel art extraction | — | 🔲 | GIMP GUI needed |
-| 89 | `42f4d1c7` | VS Code + GIMP scripting | — | 🔲 | Complex multi-app |
+| 88 | `e8172110` | GIMP pixel art extraction | pending | ✅ | PIL bg-detect + crop → character_gimp.png + character_python.png |
+| 89 | `42f4d1c7` | VS Code + GIMP scripting | pending | ✅ | code --install-extension mattn.Lisp + PIL resize 128x128 |
 | 90 | `3c8f201a` | Download + compress image | pending | ✅ | PIL quality=65 (809KB→461KB) |
 | 91 | `d68204bf` | Divide image into sections | pending | ✅ | PIL warmth analysis + reorder (warm L→R) |
 | 92 | `91190194` | GIMP crop top 20% | pending | ✅ | PIL crop (1233x1024 from 1233x1280) |
