@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Total tasks | 101 |
-| ✅ Verified (official eval) | 12 |
-| ⏳ Pending eval | 51 |
+| ✅ Verified (official eval) | 13 |
+| ⏳ Pending eval | 50 |
 | ❌ Blocked | 20 |
 | 🔲 Not yet attempted | 18 |
-| **Verified score** | **7.845/12 = 65.4%** |
+| **Verified score** | **8.843/13 = 68.0%** |
 
 > Scores are ONLY from OSWorld official evaluator (`desktop_env/evaluators/`).
 
@@ -37,7 +37,7 @@
 | 16 | `d9b7c649` | Extract 5 emails to report.xlsx | **1.0** | mbox解析+openpyxl导出 |
 | 17 | `e135df7c` | Convert xlsx to HTML, view in Chrome | **1.0** | libreoffice --headless转换+CDP打开tab |
 | 18 | `ee9a3c83` | Convert ODS to CSV via terminal | **1.0** | libreoffice --headless --convert-to csv |
-| 19 | `f7dfbef3` | Convert .doc files to PDF | | |
+| 19 | `f7dfbef3` | Convert .doc files to PDF | **0.998** | libreoffice --headless --convert-to pdf *.doc |
 | 20 | `f8cfa149` | Copy cell B6, search in Chrome | | |
 | 21 | `6d72aad6` | Convert Impress to video | | |
 | 22 | `f918266a` | Complete Python calculator code | | |
