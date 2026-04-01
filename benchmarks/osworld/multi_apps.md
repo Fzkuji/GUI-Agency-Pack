@@ -7,11 +7,11 @@
 | Metric | Value |
 |--------|-------|
 | Total tasks | 101 |
-| ✅ Verified (official eval) | 8 |
-| ⏳ Pending eval | 55 |
+| ✅ Verified (official eval) | 9 |
+| ⏳ Pending eval | 54 |
 | ❌ Blocked | 20 |
 | 🔲 Not yet attempted | 18 |
-| **Verified score** | **4.845/8 = 60.6%** |
+| **Verified score** | **4.845/9 = 53.8%** |
 
 > Scores are ONLY from OSWorld official evaluator (`desktop_env/evaluators/`).
 
@@ -33,7 +33,7 @@
 | 12 | `937087b6` | Set VLC as default player | **0.0** | 部分video类型未覆盖，evaluator检查所有MIME type |
 | 13 | `a0b9dc9c` | Backup emails | | |
 | 14 | `b52b40a5` | Merge PDFs | | |
-| 15 | `c867c42d` | Export TB contacts to CSV/XLSX | | |
+| 15 | `c867c42d` | Export TB contacts to CSV/XLSX | **0.0** | 导出30条但gold有60条，sqlite缺少vCard解析的字段 |
 | 16 | `d9b7c649` | Extract 5 emails to report.xlsx | | |
 | 17 | `e135df7c` | Convert xlsx to HTML, view in Chrome | | |
 | 18 | `ee9a3c83` | Convert ODS to CSV via terminal | | |
