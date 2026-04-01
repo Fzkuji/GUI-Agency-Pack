@@ -149,7 +149,8 @@ def run_ocr(image_path: str) -> OCRResult:
 def run_detector(image_path: str, conf: float = 0.1) -> DetectResult:
     """Run GPA-GUI-Detector on an image. Returns UI elements with bounding boxes."""
     from ui_detector import detect_icons
-    elements = detect_icons(image_path, conf=conf)
+    # detect_icons returns (elements, img_w, img_h)
+    elements, img_w, img_h = detect_icons(image_path, conf=conf)
     return DetectResult(elements=elements, count=len(elements))
 
 
@@ -159,8 +160,10 @@ def detect_all(image_path: str, conf: float = 0.1) -> DetectAllResult:
     Gracefully degrades if detector is unavailable (OCR-only mode)."""
     try:
         from ui_detector import detect_all as _detect_all, get_screen_info
-        elements = _detect_all(image_path, conf=conf)
+        # detect_all returns (icons, texts, merged, img_w, img_h)
+        icons, texts, merged, img_w, img_h = _detect_all(image_path, conf=conf)
         info = get_screen_info()
+        elements = merged  # merged list contains all elements in click-space
     except (ImportError, Exception):
         # Fallback: OCR-only
         ocr = run_ocr(image_path)
