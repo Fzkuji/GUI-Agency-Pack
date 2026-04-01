@@ -1,49 +1,65 @@
 """
-GUI Agent Functions — LLM-executed functions for desktop automation.
+GUI Agent Functions — LLM-executed + deterministic functions for desktop automation.
 
-These functions wrap the existing scripts (app_memory, ui_detector, gui_agent, etc.)
-with the Agentic Programming @function pattern. The docstring IS the prompt.
+Two levels:
+    Low-level (deterministic, no LLM):
+        take_screenshot, run_ocr, run_detector, detect_all,
+        template_match, identify_state, click, type_text, paste,
+        press_key, key_combo, get_frontmost_app, activate_app,
+        learn_from_screenshot, record_transition
 
-Architecture:
-    @function (LLM decides how)  →  scripts/*.py (Python does the work)
+    High-level (hybrid: Python gathers data, LLM reasons):
+        observe, learn, act, remember, navigate, verify
 
-    observe()   → LLM interprets screen state using OCR + detector + vision
-    learn()     → LLM identifies and labels UI components
-    act()       → LLM decides target, scripts execute click/type
-    remember()  → LLM manages visual memory (label, merge, forget)
-    navigate()  → LLM plans multi-step navigation via state graph
-    verify()    → LLM checks if action succeeded
-
-Each function takes a Session as first arg (the LLM that thinks)
-and uses scripts/*.py for the deterministic operations (screenshot, OCR, click).
+High-level functions call low-level functions internally.
+You can also call low-level functions directly for deterministic tasks.
 """
 
+# Low-level (deterministic)
 from harness_functions.functions import (
-    observe,
-    learn,
-    act,
-    remember,
-    navigate,
-    verify,
-    ObserveResult,
-    LearnResult,
-    ActResult,
-    RememberResult,
-    NavigateResult,
-    VerifyResult,
+    take_screenshot, ScreenshotResult,
+    run_ocr, OCRResult,
+    run_detector, DetectResult,
+    detect_all, DetectAllResult,
+    template_match, TemplateMatchResult,
+    identify_state, StateResult,
+    click,
+    type_text,
+    paste,
+    press_key,
+    key_combo,
+    get_frontmost_app,
+    activate_app,
+    learn_from_screenshot,
+    record_transition,
+)
+
+# High-level (LLM-powered)
+from harness_functions.functions import (
+    observe, ObserveResult,
+    learn, LearnResult,
+    act, ActResult,
+    remember, RememberResult,
+    navigate, NavigateResult,
+    verify, VerifyResult,
 )
 
 __all__ = [
-    "observe",
-    "learn",
-    "act",
-    "remember",
-    "navigate",
-    "verify",
-    "ObserveResult",
-    "LearnResult",
-    "ActResult",
-    "RememberResult",
-    "NavigateResult",
-    "VerifyResult",
+    # Low-level
+    "take_screenshot", "ScreenshotResult",
+    "run_ocr", "OCRResult",
+    "run_detector", "DetectResult",
+    "detect_all", "DetectAllResult",
+    "template_match", "TemplateMatchResult",
+    "identify_state", "StateResult",
+    "click", "type_text", "paste", "press_key", "key_combo",
+    "get_frontmost_app", "activate_app",
+    "learn_from_screenshot", "record_transition",
+    # High-level
+    "observe", "ObserveResult",
+    "learn", "LearnResult",
+    "act", "ActResult",
+    "remember", "RememberResult",
+    "navigate", "NavigateResult",
+    "verify", "VerifyResult",
 ]

@@ -1,27 +1,36 @@
 """
-GUI Agent Functions — the 6 core functions for desktop automation.
+GUI Agent Functions — 6 core + sub-functions for desktop automation.
 
-Each function's docstring is the LLM prompt. Change the docstring → change the behavior.
-The scripts/*.py layer handles all deterministic operations (screenshot, OCR, click, etc.).
+Architecture:
+    High-level functions (LLM reasoning):
+        observe, learn, act, remember, navigate, verify
+
+    Low-level functions (Python deterministic):
+        screenshot, ocr, detect, template_match, click, type_text, ...
+
+    High-level calls low-level to gather data, then asks LLM to reason.
+    Functions can call each other (observe calls screenshot + ocr + detect).
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel
 
-# Add parent to path for imports
+# Setup paths
 SKILL_DIR = Path(__file__).parent.parent
 SCRIPTS_DIR = SKILL_DIR / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-# Import from harness framework
-sys.path.insert(0, str(SKILL_DIR.parent.parent.parent / "Documents" / "LLM Agent Harness" / "llm-agent-harness"))
+# Framework import
+_harness_path = str(SKILL_DIR.parent.parent.parent / "Documents" / "LLM Agent Harness" / "llm-agent-harness")
+if _harness_path not in sys.path:
+    sys.path.insert(0, _harness_path)
 from harness import function, Session
 
 
@@ -29,439 +38,680 @@ from harness import function, Session
 # Return types
 # ═══════════════════════════════════════════
 
+class ScreenshotResult(BaseModel):
+    path: str
+    width: int = 0
+    height: int = 0
+
+class OCRResult(BaseModel):
+    texts: list[dict]      # [{label, cx, cy, x, y, w, h}, ...]
+    count: int
+
+class DetectResult(BaseModel):
+    elements: list[dict]   # [{cx, cy, x, y, w, h, confidence, label}, ...]
+    count: int
+
+class DetectAllResult(BaseModel):
+    """Combined detection: OCR + GPA-GUI-Detector + (optional) Accessibility."""
+    elements: list[dict]   # merged elements in click-space coordinates
+    count: int
+    screenshot_path: str
+    screen_info: dict      # {detect_w, detect_h, click_w, click_h, scale_x, scale_y}
+
+class TemplateMatchResult(BaseModel):
+    matched: list[dict]    # [{name, cx, cy, confidence}, ...]
+    count: int
+
+class StateResult(BaseModel):
+    state_name: Optional[str] = None
+    confidence: float = 0.0
+    visible_components: list[str] = []
+
 class ObserveResult(BaseModel):
-    """What the agent sees on screen right now."""
-    app_name: str                          # frontmost app
-    page_description: str                  # what's on screen
-    visible_text: list[str]                # OCR results (key texts)
-    interactive_elements: list[str]        # clickable things found
-    state_name: Optional[str] = None       # known state from memory (if any)
+    app_name: str
+    page_description: str
+    visible_text: list[str]
+    interactive_elements: list[str]
+    state_name: Optional[str] = None
     state_confidence: Optional[float] = None
-    target_visible: bool = False           # is the user's target on screen?
-    target_location: Optional[dict] = None # {x, y} if found
-    screenshot_path: Optional[str] = None  # path to screenshot taken
+    target_visible: bool = False
+    target_location: Optional[dict] = None
+    screenshot_path: Optional[str] = None
 
 class LearnResult(BaseModel):
-    """Result of learning a new app's UI."""
     app_name: str
-    components_found: int                  # total detected
-    components_saved: int                  # new ones saved to memory
-    component_names: list[str]             # what was identified
-    page_name: str                         # human-readable page label
-    already_known: bool = False            # was this app already in memory?
+    components_found: int
+    components_saved: int
+    component_names: list[str]
+    page_name: str
+    already_known: bool = False
 
 class ActResult(BaseModel):
-    """Result of performing a GUI action."""
-    action: str                            # what was done ("click", "type", "shortcut")
-    target: str                            # what was targeted
-    coordinates: Optional[dict] = None     # {x, y} where action happened
-    success: bool                          # did it appear to work?
-    before_state: Optional[str] = None     # state before action
-    after_state: Optional[str] = None      # state after action
-    screen_changed: bool = False           # did the screen change?
-    error: Optional[str] = None            # error message if failed
+    action: str
+    target: str
+    coordinates: Optional[dict] = None
+    success: bool
+    before_state: Optional[str] = None
+    after_state: Optional[str] = None
+    screen_changed: bool = False
+    error: Optional[str] = None
 
 class RememberResult(BaseModel):
-    """Result of a memory operation."""
-    operation: str                         # "save", "merge", "forget", "list"
+    operation: str
     app_name: str
-    details: str                           # human-readable summary
+    details: str
 
 class NavigateResult(BaseModel):
-    """Result of multi-step navigation."""
     start_state: str
     target_state: str
-    path: list[str]                        # states traversed
+    path: list[str]
     steps_taken: int
     reached_target: bool
-    current_state: str                     # where we ended up
+    current_state: str
 
 class VerifyResult(BaseModel):
-    """Result of verification after an action."""
-    expected: str                          # what we expected to see
-    actual: str                            # what we actually see
-    verified: bool                         # does actual match expected?
-    evidence: str                          # why we think so
+    expected: str
+    actual: str
+    verified: bool
+    evidence: str
     screenshot_path: Optional[str] = None
 
 
 # ═══════════════════════════════════════════
-# Helper: run scripts
+# Low-level functions (deterministic, no LLM)
 # ═══════════════════════════════════════════
 
-def _run_script(script_name: str, *args) -> str:
-    """Run a Python script from scripts/ and return stdout."""
-    cmd = [sys.executable, str(SCRIPTS_DIR / script_name)] + list(args)
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    if result.returncode != 0:
-        raise RuntimeError(f"{script_name} failed: {result.stderr[:500]}")
-    return result.stdout.strip()
+def take_screenshot(app_name: str = None, fullscreen: bool = True) -> ScreenshotResult:
+    """Take a screenshot. Returns path and dimensions."""
+    from platform_input import screenshot as _screenshot, capture_window
+    import cv2
+
+    if app_name and not fullscreen:
+        path = capture_window(app_name)
+    else:
+        path = _screenshot()
+
+    if path and Path(path).exists():
+        img = cv2.imread(path)
+        h, w = img.shape[:2] if img is not None else (0, 0)
+        return ScreenshotResult(path=path, width=w, height=h)
+
+    return ScreenshotResult(path=path or "/tmp/gui_agent_screen.png")
 
 
-def _take_screenshot() -> str:
-    """Take a screenshot and return the path."""
-    import tempfile
-    path = Path(tempfile.mkdtemp()) / "screenshot.png"
-    subprocess.run(["screencapture", "-x", str(path)], check=True, timeout=10)
-    return str(path)
+def run_ocr(image_path: str) -> OCRResult:
+    """Run Apple Vision OCR on an image. Returns text elements with coordinates."""
+    from ui_detector import detect_text
+    texts = detect_text(image_path)
+    return OCRResult(texts=texts, count=len(texts))
 
 
-def _run_ocr(image_path: str) -> list[dict]:
-    """Run OCR on an image, return text elements."""
-    try:
-        from ui_detector import detect_text
-        return detect_text(image_path)
-    except Exception:
-        return []
+def run_detector(image_path: str, conf: float = 0.1) -> DetectResult:
+    """Run GPA-GUI-Detector on an image. Returns UI elements with bounding boxes."""
+    from ui_detector import detect_icons
+    elements = detect_icons(image_path, conf=conf)
+    return DetectResult(elements=elements, count=len(elements))
 
 
-def _run_detector(image_path: str) -> list[dict]:
-    """Run GPA-GUI-Detector on an image, return UI elements."""
-    try:
-        from ui_detector import detect_icons
-        return detect_icons(image_path)
-    except Exception:
-        return []
+def detect_all(image_path: str, conf: float = 0.1) -> DetectAllResult:
+    """Run full detection pipeline: OCR + GPA-GUI-Detector + merge.
+    Returns all elements in click-space coordinates."""
+    from ui_detector import detect_all as _detect_all, get_screen_info
+    elements = _detect_all(image_path, conf=conf)
+    info = get_screen_info()
+    return DetectAllResult(
+        elements=elements,
+        count=len(elements),
+        screenshot_path=image_path,
+        screen_info=info,
+    )
 
 
-def _get_frontmost_app() -> str:
+def template_match(app_name: str, image_path: str = None) -> TemplateMatchResult:
+    """Match known components from memory against the current screen."""
+    from app_memory import quick_template_check, get_app_dir
+    app_dir = get_app_dir(app_name)
+    if not app_dir or not Path(app_dir).exists():
+        return TemplateMatchResult(matched=[], count=0)
+
+    from app_memory import load_components
+    components = load_components(app_dir)
+    comp_names = [c["name"] for c in components if "name" in c]
+
+    matched = quick_template_check(app_dir, comp_names, img=image_path)
+    return TemplateMatchResult(matched=matched, count=len(matched))
+
+
+def identify_state(app_name: str) -> StateResult:
+    """Identify the current state of an app from visual memory."""
+    from app_memory import (
+        identify_state_by_components, get_app_dir,
+        load_components, load_states
+    )
+    from app_memory import quick_template_check
+
+    app_dir = get_app_dir(app_name)
+    if not app_dir or not Path(app_dir).exists():
+        return StateResult()
+
+    components = load_components(app_dir)
+    comp_names = [c["name"] for c in components if "name" in c]
+    matched = quick_template_check(app_dir, comp_names)
+    visible_names = [m["name"] for m in matched]
+
+    state_name, conf = identify_state_by_components(app_name, visible_names)
+    return StateResult(
+        state_name=state_name,
+        confidence=conf,
+        visible_components=visible_names,
+    )
+
+
+def click(x: int, y: int, button: str = "left", clicks: int = 1):
+    """Click at screen coordinates."""
+    from platform_input import mouse_click
+    mouse_click(x, y, button=button, clicks=clicks)
+
+
+def type_text(text: str):
+    """Type text using keyboard."""
+    from platform_input import type_text as _type
+    _type(text)
+
+
+def paste(text: str):
+    """Paste text via clipboard."""
+    from platform_input import paste_text
+    paste_text(text)
+
+
+def press_key(key: str):
+    """Press a single key."""
+    from platform_input import key_press
+    key_press(key)
+
+
+def key_combo(*keys: str):
+    """Press a key combination (e.g., key_combo('cmd', 'c'))."""
+    from platform_input import key_combo as _combo
+    _combo(*keys)
+
+
+def get_frontmost_app() -> str:
     """Get the name of the frontmost application."""
-    try:
-        r = subprocess.run(
-            ["osascript", "-e",
-             'tell application "System Events" to name of first process whose frontmost is true'],
-            capture_output=True, text=True, timeout=5
-        )
-        return r.stdout.strip()
-    except Exception:
-        return "unknown"
+    from platform_input import get_frontmost_app as _get
+    return _get()
+
+
+def activate_app(app_name: str):
+    """Bring an app to the foreground."""
+    from platform_input import activate_app as _activate
+    _activate(app_name)
+
+
+def learn_from_screenshot(image_path: str, app_name: str,
+                          page_name: str, domain: str = None) -> dict:
+    """Run detection on a screenshot and save all components to memory."""
+    from app_memory import learn_from_screenshot as _learn
+    return _learn(
+        img_path=image_path,
+        domain=domain,
+        app_name=app_name,
+        page_name=page_name,
+    )
+
+
+def record_transition(before_img: str, after_img: str,
+                      click_label: str, click_pos: tuple,
+                      app_name: str, domain: str = None) -> dict:
+    """Record a state transition (before/after a click)."""
+    from app_memory import record_page_transition
+    return record_page_transition(
+        before_img_path=before_img,
+        after_img_path=after_img,
+        click_label=click_label,
+        click_pos=click_pos,
+        domain=domain,
+        app_name=app_name,
+    )
 
 
 # ═══════════════════════════════════════════
-# Functions (docstring = LLM prompt)
+# High-level functions (LLM reasoning)
 # ═══════════════════════════════════════════
 
-def observe(session: Session, task: str, screenshot_path: str = None) -> ObserveResult:
-    """Observe the current screen state.
+def observe(session: Session, task: str, app_name: str = None) -> ObserveResult:
+    """Observe the current screen. Calls low-level functions, then LLM interprets.
 
-    This is a hybrid function: Python gathers data, LLM interprets it.
-
-    1. Python: take screenshot, run OCR, run detector, check memory
-    2. LLM: interpret all the data and answer the task
-    3. Python: parse LLM output into ObserveResult
+    Flow: screenshot → OCR → detector → memory check → LLM interprets
     """
-    # Step 1: Python gathers data
-    app_name = _get_frontmost_app()
+    # 1. Deterministic: gather data
+    if not app_name:
+        app_name = get_frontmost_app()
 
-    if not screenshot_path:
-        screenshot_path = _take_screenshot()
+    shot = take_screenshot()
+    ocr = run_ocr(shot.path)
+    detection = detect_all(shot.path)
+    state = identify_state(app_name)
 
-    ocr_results = _run_ocr(screenshot_path)
-    ocr_texts = [f"  '{r.get('label', '')}' at ({r.get('cx', 0)}, {r.get('cy', 0)})"
-                 for r in ocr_results[:50]]  # limit to top 50
+    # Format for LLM
+    ocr_lines = [f"  '{t.get('label','')}' at ({t.get('cx',0)}, {t.get('cy',0)})"
+                 for t in ocr.texts[:50]]
+    det_lines = [f"  [{e.get('label','component')}] at ({e.get('cx',0)}, {e.get('cy',0)}) conf={e.get('confidence',0):.2f}"
+                 for e in detection.elements[:40]]
+    state_line = f"State: {state.state_name} (conf={state.confidence:.2f}), visible: {state.visible_components[:10]}" if state.state_name else "(unknown state)"
 
-    detector_results = _run_detector(screenshot_path)
-    detector_items = [f"  component at ({r.get('cx', 0)}, {r.get('cy', 0)}) conf={r.get('confidence', 0):.2f}"
-                      for r in detector_results[:30]]
-
-    # Check memory for known state
-    state_name, state_conf = None, None
-    try:
-        from app_memory import identify_state_by_components, _detect_visible_components
-        visible = _detect_visible_components(app_name)
-        state_name, state_conf = identify_state_by_components(app_name, visible)
-    except Exception:
-        pass
-
-    # Step 2: LLM interprets
-    prompt = f"""You are observing the current screen to understand what's visible.
+    # 2. LLM: interpret
+    prompt = f"""You are observing the current screen.
 
 ## Task
 {task}
 
-## Current app
+## Frontmost app
 {app_name}
 
-## OCR text detected (with coordinates)
-{chr(10).join(ocr_texts) if ocr_texts else '(no text detected)'}
+## OCR text (with click-space coordinates)
+{chr(10).join(ocr_lines) if ocr_lines else '(none)'}
 
-## UI components detected (with coordinates)
-{chr(10).join(detector_items) if detector_items else '(no components detected)'}
+## Detected UI elements (with click-space coordinates)
+{chr(10).join(det_lines) if det_lines else '(none)'}
 
-## Known state from memory
-{f'State: {state_name} (confidence: {state_conf:.2f})' if state_name else '(unknown state)'}
+## Visual memory
+{state_line}
 
-## Screenshot
-(attached as image)
+Based on ALL data above, report what you see.
+Coordinates MUST come from the OCR/detector lists above, never estimated.
 
-Based on ALL of this information, determine:
-- What app is open and what page/state it's in
-- What interactive elements are available
-- Whether the target described in the task is visible
-- If visible, where exactly it is (x, y coordinates from OCR or detector, NOT from your visual estimate)
-
-IMPORTANT: Coordinates must come from OCR or detector results listed above.
-
-Respond with ONLY a JSON object matching this schema:
+Return JSON:
 {json.dumps(ObserveResult.model_json_schema(), indent=2)}"""
 
-    # Send with screenshot if session supports images
-    message = {"text": prompt, "images": [screenshot_path]}
-    reply = session.send(message)
+    reply = session.send({"text": prompt, "images": [shot.path]})
 
-    # Step 3: Parse
+    # 3. Parse
     try:
-        result = _parse_observe_result(reply, app_name, screenshot_path, state_name, state_conf)
+        data = _parse_json(reply)
+        data.setdefault("app_name", app_name)
+        data.setdefault("screenshot_path", shot.path)
+        data.setdefault("state_name", state.state_name)
+        data.setdefault("state_confidence", state.confidence)
+        return ObserveResult(**data)
     except Exception:
-        # Fallback: construct from raw data
-        result = ObserveResult(
+        return ObserveResult(
             app_name=app_name,
-            page_description=reply[:200],
-            visible_text=[r.get("label", "") for r in ocr_results[:10]],
+            page_description=reply[:300],
+            visible_text=[t.get("label", "") for t in ocr.texts[:10]],
             interactive_elements=[],
-            state_name=state_name,
-            state_confidence=state_conf,
-            target_visible=False,
-            screenshot_path=screenshot_path,
+            state_name=state.state_name,
+            state_confidence=state.confidence,
+            screenshot_path=shot.path,
         )
 
-    return result
 
+def learn(session: Session, app_name: str) -> LearnResult:
+    """Learn a new app's UI. Calls detection, then LLM labels components.
 
-def _parse_observe_result(reply: str, app_name: str, screenshot_path: str,
-                          state_name: str = None, state_conf: float = None) -> ObserveResult:
-    """Parse LLM reply into ObserveResult."""
-    text = reply.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        text = "\n".join(lines).strip()
+    Flow: screenshot → detect_all → LLM labels each component → save to memory
+    """
+    shot = take_screenshot()
+    detection = detect_all(shot.path)
 
-    data = json.loads(text)
-    # Ensure required fields
-    data.setdefault("app_name", app_name)
-    data.setdefault("screenshot_path", screenshot_path)
-    if state_name and not data.get("state_name"):
-        data["state_name"] = state_name
-        data["state_confidence"] = state_conf
-    return ObserveResult(**data)
+    det_lines = [f"  Component {i}: at ({e.get('cx',0)}, {e.get('cy',0)}), size={e.get('w',0)}x{e.get('h',0)}, conf={e.get('confidence',0):.2f}"
+                 for i, e in enumerate(detection.elements[:40])]
 
+    ocr = run_ocr(shot.path)
+    ocr_lines = [f"  '{t.get('label','')}' at ({t.get('cx',0)}, {t.get('cy',0)})"
+                 for t in ocr.texts[:50]]
 
-@function(return_type=LearnResult)
-def learn(session: Session, app_name: str, screenshot_path: str = None) -> LearnResult:
-    """You are learning a new app's UI for the first time.
+    prompt = f"""You are learning the UI of "{app_name}" for the first time.
 
-App to learn: {app_name}
+## Detected UI components (need labels)
+{chr(10).join(det_lines) if det_lines else '(none)'}
 
-You will receive:
-1. A screenshot of the app
-2. All UI components detected by GPA-GUI-Detector (bounding boxes, no labels)
-3. OCR text detected on screen
+## OCR text on screen
+{chr(10).join(ocr_lines) if ocr_lines else '(none)'}
 
-Your job:
-- Look at each detected component in the screenshot
-- Give each component a descriptive name based on what it is (e.g., "send_button", "search_bar", "contact_list")
-- Filter out duplicates and non-interactive decorative elements
-- Group related components if they belong together
-- Identify the current page/state name (e.g., "chat_main", "settings", "login")
+## Screenshot
+(attached)
 
-Name components clearly and consistently. Use snake_case. Be specific: "send_message_button" not just "button"."""
+For each component, give it a descriptive snake_case name based on what it is.
+Filter out decorative/non-interactive elements.
+Identify the current page name.
+
+Return JSON:
+{json.dumps(LearnResult.model_json_schema(), indent=2)}"""
+
+    reply = session.send({"text": prompt, "images": [shot.path]})
+
+    try:
+        data = _parse_json(reply)
+        data.setdefault("app_name", app_name)
+
+        # Save to memory
+        result = learn_from_screenshot(shot.path, app_name, data.get("page_name", "unknown"))
+        data.setdefault("components_found", result.get("saved", 0) + result.get("existing", 0))
+        data.setdefault("components_saved", result.get("saved", 0))
+
+        return LearnResult(**data)
+    except Exception as e:
+        return LearnResult(
+            app_name=app_name,
+            components_found=detection.count,
+            components_saved=0,
+            component_names=[],
+            page_name="unknown",
+        )
 
 
 def act(session: Session, action: str, target: str,
-        text: str = None, screenshot_path: str = None) -> ActResult:
-    """Perform a GUI action: click, type, shortcut, or scroll.
+        text: str = None, app_name: str = None) -> ActResult:
+    """Perform a GUI action. Detects target, LLM confirms, Python executes.
 
-    Hybrid function:
-    1. Python: screenshot, OCR, detector, template match
-    2. LLM: find target element, decide exact coordinates
-    3. Python: execute click/type, take after-screenshot, diff
+    Flow: screenshot → OCR + template match → LLM finds target → click/type → verify diff
     """
-    # Step 1: Gather data
-    app_name = _get_frontmost_app()
+    if not app_name:
+        app_name = get_frontmost_app()
 
-    if not screenshot_path:
-        screenshot_path = _take_screenshot()
+    # Before screenshot
+    before_shot = take_screenshot()
+    ocr = run_ocr(before_shot.path)
+    tmatch = template_match(app_name, before_shot.path)
 
-    ocr_results = _run_ocr(screenshot_path)
-    ocr_texts = [f"  '{r.get('label', '')}' at ({r.get('cx', 0)}, {r.get('cy', 0)})"
-                 for r in ocr_results[:50]]
+    ocr_lines = [f"  '{t.get('label','')}' at ({t.get('cx',0)}, {t.get('cy',0)})"
+                 for t in ocr.texts[:50]]
+    match_lines = [f"  '{m.get('name','')}' at ({m.get('cx',0)}, {m.get('cy',0)}) conf={m.get('confidence',0):.2f}"
+                   for m in tmatch.matched[:20]]
 
-    # Check template matches from memory
-    memory_matches = []
-    try:
-        from app_memory import _detect_visible_components
-        visible = _detect_visible_components(app_name)
-        memory_matches = [f"  '{c['name']}' at ({c.get('cx', 0)}, {c.get('cy', 0)}) conf={c.get('confidence', 0):.2f}"
-                         for c in visible[:20]]
-    except Exception:
-        pass
+    before_state = identify_state(app_name)
 
-    # Step 2: LLM decides coordinates
-    prompt = f"""You are performing a GUI action on the screen.
+    prompt = f"""You are performing a GUI action.
 
-## Action
-{action}: {target}
-{f'Text to type: {text}' if text else ''}
+## Action: {action}
+## Target: {target}
+{f'## Text to type: {text}' if text else ''}
 
-## Current app
-{app_name}
+## App: {app_name}
 
-## OCR text detected (with coordinates)
-{chr(10).join(ocr_texts) if ocr_texts else '(no text detected)'}
+## OCR text (with coordinates)
+{chr(10).join(ocr_lines) if ocr_lines else '(none)'}
 
 ## Known components from memory (template matched)
-{chr(10).join(memory_matches) if memory_matches else '(no known components matched)'}
+{chr(10).join(match_lines) if match_lines else '(none)'}
 
-## Screenshot
-(attached as image)
+Find the target "{target}" in the lists above.
+Report EXACT coordinates from the list. Do NOT estimate from image.
+If not found, set success=false.
 
-Your job:
-1. Find the target "{target}" in the OCR results or memory matches above
-2. Report the EXACT coordinates from the list above (not estimated from image)
-3. If you can't find it, set success=false
-
-Respond with ONLY a JSON object matching this schema:
+Return JSON:
 {json.dumps(ActResult.model_json_schema(), indent=2)}"""
 
-    message = {"text": prompt, "images": [screenshot_path]}
-    reply = session.send(message)
+    reply = session.send({"text": prompt, "images": [before_shot.path]})
 
-    # Step 3: Parse and execute
     try:
-        text_clean = reply.strip()
-        if text_clean.startswith("```"):
-            lines = text_clean.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
-            text_clean = "\n".join(lines).strip()
-        data = json.loads(text_clean)
-        result = ActResult(**data)
+        data = _parse_json(reply)
+        result = ActResult(**{**data, "action": action, "target": target})
 
-        # If LLM found coordinates and action is click, execute it
-        if result.success and result.coordinates and action.lower() in ("click", "single_click"):
-            try:
-                from platform_input import click_at
-                click_at(result.coordinates["x"], result.coordinates["y"])
+        # Execute if LLM found the target
+        if result.success and result.coordinates:
+            cx, cy = result.coordinates.get("x", 0), result.coordinates.get("y", 0)
 
-                # Take after-screenshot and check diff
-                import time
-                time.sleep(0.5)
-                after_path = _take_screenshot()
-                after_ocr = _run_ocr(after_path)
-                before_texts = {r.get("label", "") for r in ocr_results}
-                after_texts = {r.get("label", "") for r in after_ocr}
-                result.screen_changed = before_texts != after_texts
-            except Exception as e:
-                result.success = False
-                result.error = str(e)
+            if action.lower() in ("click", "single_click"):
+                click(cx, cy)
+            elif action.lower() == "double_click":
+                click(cx, cy, clicks=2)
+            elif action.lower() == "right_click":
+                click(cx, cy, button="right")
+            elif action.lower() == "type" and text:
+                click(cx, cy)
+                time.sleep(0.3)
+                paste(text)
+
+            # After screenshot + diff
+            time.sleep(0.5)
+            after_shot = take_screenshot()
+            after_ocr = run_ocr(after_shot.path)
+            before_texts = {t.get("label", "") for t in ocr.texts}
+            after_texts = {t.get("label", "") for t in after_ocr.texts}
+            result.screen_changed = before_texts != after_texts
+
+            after_state = identify_state(app_name)
+            result.before_state = before_state.state_name
+            result.after_state = after_state.state_name
+
+            # Record transition
+            if result.screen_changed:
+                try:
+                    record_transition(
+                        before_shot.path, after_shot.path,
+                        target, (cx, cy), app_name,
+                    )
+                except Exception:
+                    pass
 
         return result
 
     except Exception as e:
         return ActResult(
-            action=action,
-            target=target,
-            success=False,
-            error=f"Failed to parse LLM response: {e}",
+            action=action, target=target, success=False,
+            error=f"Failed: {e}",
         )
 
 
-@function(return_type=RememberResult)
 def remember(session: Session, operation: str, app_name: str,
              details: str = None) -> RememberResult:
-    """You are managing the visual memory for an app.
+    """Manage visual memory. LLM decides what to save/merge/forget.
 
-Operation: {operation}
-App: {app_name}
-Details: {details}
+    Flow: load memory → LLM reviews → execute operation
+    """
+    from app_memory import (
+        get_app_dir, load_components, load_states,
+        save_components, save_states, forget_stale_components,
+        merge_similar_states, load_meta, save_meta
+    )
 
-Available operations:
-- "save": Save new components detected on the current screen
-- "merge": Merge duplicate states that look the same
-- "forget": Remove components that haven't been matched in 15+ attempts
-- "list": List all known components and states for the app
-- "rename": Rename a component to a better name
+    app_dir = get_app_dir(app_name)
 
-For "save": You'll receive detected components. Decide which are worth saving.
-For "merge": You'll see similar states. Decide if they should be combined.
-For "forget": You'll see components with low match rates. Decide what to remove.
+    if operation == "list":
+        components = load_components(app_dir) if app_dir else []
+        states = load_states(app_dir) if app_dir else {}
+        return RememberResult(
+            operation="list", app_name=app_name,
+            details=f"{len(components)} components, {len(states)} states",
+        )
 
-Be conservative with forgetting — only remove things that are clearly obsolete."""
+    if operation == "forget":
+        if not app_dir:
+            return RememberResult(operation="forget", app_name=app_name, details="No memory found")
+        components = load_components(app_dir)
+        meta = load_meta(app_dir)
+        states = load_states(app_dir)
+        transitions = {}
+        try:
+            from app_memory import load_transitions
+            transitions = load_transitions(app_dir)
+        except Exception:
+            pass
+        removed = forget_stale_components(app_dir, components, meta, states, transitions)
+        return RememberResult(
+            operation="forget", app_name=app_name,
+            details=f"Removed {removed} stale components",
+        )
+
+    if operation == "merge":
+        if not app_dir:
+            return RememberResult(operation="merge", app_name=app_name, details="No memory found")
+        states = load_states(app_dir)
+        transitions = {}
+        try:
+            from app_memory import load_transitions
+            transitions = load_transitions(app_dir)
+        except Exception:
+            pass
+        merged = merge_similar_states(states, transitions)
+        save_states(app_dir, states)
+        return RememberResult(
+            operation="merge", app_name=app_name,
+            details=f"Merged {merged} similar states",
+        )
+
+    return RememberResult(
+        operation=operation, app_name=app_name,
+        details=f"Unknown operation: {operation}",
+    )
 
 
-@function(return_type=NavigateResult)
 def navigate(session: Session, target_state: str, app_name: str) -> NavigateResult:
-    """You are navigating through an app to reach a target state.
+    """Navigate through an app's state graph to reach a target state.
 
-Target state: {target_state}
-App: {app_name}
+    Flow: identify current state → BFS path → execute steps → verify each transition
+    """
+    from app_memory import (
+        get_app_dir, load_states, load_transitions, load_workflows,
+    )
 
-You will receive:
-1. Current state (from visual memory)
-2. The state graph (known states and transitions between them)
-3. BFS shortest path from current state to target (if one exists)
+    current = identify_state(app_name)
+    start = current.state_name or "unknown"
 
-Your job:
-1. If a known path exists, follow it step by step
-2. At each step, verify you reached the expected state (template match or OCR)
-3. If verification fails, re-observe and try an alternative path
-4. If no known path exists, explore: try clicking likely elements and observe results
+    app_dir = get_app_dir(app_name)
+    if not app_dir:
+        return NavigateResult(
+            start_state=start, target_state=target_state,
+            path=[], steps_taken=0, reached_target=False, current_state=start,
+        )
 
-Verification tiers (try in order):
-1. Template match against known components → fast, reliable
-2. Full detection (OCR + GPA) → slower but comprehensive
-3. LLM visual check → last resort, send screenshot to image tool
+    states = load_states(app_dir)
+    transitions = {}
+    try:
+        transitions = load_transitions(app_dir)
+    except Exception:
+        pass
 
-Report each state transition as you go."""
+    # BFS to find path
+    path = _bfs_path(states, transitions, start, target_state)
+
+    if not path:
+        # No known path — ask LLM what to try
+        prompt = f"""You need to navigate from "{start}" to "{target_state}" in {app_name}.
+No known path exists in the state graph.
+Known states: {list(states.keys())[:20]}
+
+What element should I click to explore? Suggest a target name from the current screen.
+Return JSON: {{"suggestion": "element_name"}}"""
+
+        reply = session.send(prompt)
+        return NavigateResult(
+            start_state=start, target_state=target_state,
+            path=[], steps_taken=0, reached_target=False, current_state=start,
+        )
+
+    # Follow the path
+    steps = 0
+    current_state = start
+    traversed = [start]
+
+    for next_state in path[1:]:
+        # Find the transition action
+        trans_key = f"{current_state}→{next_state}"
+        action_info = transitions.get(trans_key, {})
+        click_target = action_info.get("click_component", next_state)
+
+        # Execute the step
+        result = act(session, "click", click_target, app_name=app_name)
+        steps += 1
+
+        # Verify
+        new_state = identify_state(app_name)
+        current_state = new_state.state_name or "unknown"
+        traversed.append(current_state)
+
+        if current_state == target_state:
+            break
+
+    return NavigateResult(
+        start_state=start,
+        target_state=target_state,
+        path=traversed,
+        steps_taken=steps,
+        reached_target=current_state == target_state,
+        current_state=current_state,
+    )
 
 
-def verify(session: Session, expected: str,
-           screenshot_path: str = None) -> VerifyResult:
+def verify(session: Session, expected: str) -> VerifyResult:
     """Verify whether a previous action succeeded.
 
-    Hybrid function: Python takes screenshot + OCR, LLM judges.
+    Flow: screenshot → OCR → LLM judges success
     """
-    if not screenshot_path:
-        screenshot_path = _take_screenshot()
+    shot = take_screenshot()
+    ocr = run_ocr(shot.path)
+    ocr_lines = [f"  '{t.get('label', '')}'" for t in ocr.texts[:30]]
 
-    ocr_results = _run_ocr(screenshot_path)
-    ocr_texts = [f"  '{r.get('label', '')}'" for r in ocr_results[:30]]
+    prompt = f"""Verify whether the expected outcome was achieved.
 
-    prompt = f"""You are verifying whether a previous action succeeded.
-
-## Expected outcome
+## Expected
 {expected}
 
-## OCR text currently visible on screen
-{chr(10).join(ocr_texts) if ocr_texts else '(no text detected)'}
+## OCR text on screen
+{chr(10).join(ocr_lines) if ocr_lines else '(none)'}
 
 ## Screenshot
-(attached as image)
+(attached)
 
-Determine if the expected outcome is achieved.
-Provide specific evidence (what text you see, what's present/absent).
-Be honest: if it didn't work, say so clearly.
+Was the expected outcome achieved? Provide evidence.
 
-Respond with ONLY a JSON object matching this schema:
+Return JSON:
 {json.dumps(VerifyResult.model_json_schema(), indent=2)}"""
 
-    message = {"text": prompt, "images": [screenshot_path]}
-    reply = session.send(message)
+    reply = session.send({"text": prompt, "images": [shot.path]})
 
     try:
-        text_clean = reply.strip()
-        if text_clean.startswith("```"):
-            lines = text_clean.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
-            text_clean = "\n".join(lines).strip()
-        data = json.loads(text_clean)
-        data.setdefault("screenshot_path", screenshot_path)
+        data = _parse_json(reply)
+        data.setdefault("screenshot_path", shot.path)
         return VerifyResult(**data)
     except Exception:
         return VerifyResult(
-            expected=expected,
-            actual=reply[:200],
-            verified=False,
-            evidence="Failed to parse LLM response",
-            screenshot_path=screenshot_path,
+            expected=expected, actual=reply[:200],
+            verified=False, evidence="Failed to parse LLM response",
+            screenshot_path=shot.path,
         )
+
+
+# ═══════════════════════════════════════════
+# Helpers
+# ═══════════════════════════════════════════
+
+def _parse_json(reply: str) -> dict:
+    """Parse JSON from LLM reply, handling markdown code blocks."""
+    text = reply.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        text = "\n".join(lines).strip()
+    return json.loads(text)
+
+
+def _bfs_path(states: dict, transitions: dict, start: str, target: str) -> list[str]:
+    """BFS shortest path through the state graph."""
+    if start == target:
+        return [start]
+
+    from collections import deque
+    queue = deque([(start, [start])])
+    visited = {start}
+
+    # Build adjacency from transitions
+    adj = {}
+    for key in transitions:
+        if "→" in key:
+            src, dst = key.split("→", 1)
+            adj.setdefault(src, []).append(dst)
+
+    while queue:
+        current, path = queue.popleft()
+        for neighbor in adj.get(current, []):
+            if neighbor == target:
+                return path + [neighbor]
+            if neighbor not in visited:
+                visited.add(neighbor)
+                queue.append((neighbor, path + [neighbor]))
+
+    return []  # no path found
