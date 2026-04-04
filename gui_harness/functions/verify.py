@@ -26,7 +26,20 @@ def _get_runtime():
 def verify(expected: str, runtime=None) -> dict:
     """Verify whether a previous action produced the expected result.
 
-    Returns dict: expected, actual, verified, evidence, screenshot_path
+    You will receive a screenshot and OCR text of the current screen.
+    Determine if the expected outcome is visible.
+
+    Provide specific evidence: quote the exact text or element that
+    confirms or denies the expectation.
+
+    Return JSON:
+    {
+      "expected": "...",
+      "actual": "what you actually see on screen",
+      "verified": true/false,
+      "evidence": "specific text or element that confirms/denies",
+      "screenshot_path": "..."
+    }
     """
     rt = runtime or _get_runtime()
 
@@ -36,24 +49,13 @@ def verify(expected: str, runtime=None) -> dict:
         f"  '{el.get('label', '')}'" for el in ocr_results[:40]
     )
 
-    prompt = f"""Verify the expected outcome.
-
-Expected: {expected}
+    context = f"""Expected: {expected}
 
 OCR text on screen:
-{ocr_lines or '(none)'}
-
-Return JSON:
-{{
-  "expected": "{expected}",
-  "actual": "what you see",
-  "verified": true/false,
-  "evidence": "specific confirmation/denial",
-  "screenshot_path": "{img_path}"
-}}"""
+{ocr_lines or '(none)'}"""
 
     reply = rt.exec(content=[
-        {"type": "text", "text": prompt},
+        {"type": "text", "text": context},
         {"type": "image", "path": img_path},
     ])
 

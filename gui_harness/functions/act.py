@@ -29,12 +29,23 @@ def act(action: str, target: str, text: str = None,
         app_name: str = None, runtime=None) -> dict:
     """Perform a GUI action on a target element.
 
+    You will receive OCR text and detected UI elements with coordinates.
+    Find the target element and return its EXACT coordinates from the lists.
+    Do NOT estimate coordinates from the screenshot — use only the detection data.
+
     Args:
         action: "click", "double_click", "right_click", "type", "shortcut"
         target: Description of the element to interact with.
-        text:   Text to type (for "type" action).
+        text:   Text to type (for "type" action only).
 
-    Returns dict: action, target, coordinates, success, screen_changed, error
+    Return JSON:
+    {
+      "action": "...",
+      "target": "...",
+      "coordinates": {"x": 0, "y": 0} or null if not found,
+      "success": true/false,
+      "error": null or "reason why not found"
+    }
     """
     rt = runtime or _get_runtime()
 
@@ -59,7 +70,7 @@ def act(action: str, target: str, text: str = None,
         for el in elements[:50]
     )
 
-    prompt = f"""Action: {action}
+    context = f"""Action: {action}
 Target: {target}
 {f'Text to type: {text}' if text else ''}
 App: {app_name}
@@ -68,21 +79,10 @@ OCR text:
 {ocr_lines or '(none)'}
 
 Detected UI elements:
-{det_lines or '(none)'}
-
-Find "{target}" and return its EXACT coordinates from the lists above.
-
-Return JSON:
-{{
-  "action": "{action}",
-  "target": "{target}",
-  "coordinates": {{"x": 0, "y": 0}} or null,
-  "success": true/false,
-  "error": null or "reason"
-}}"""
+{det_lines or '(none)'}"""
 
     reply = rt.exec(content=[
-        {"type": "text", "text": prompt},
+        {"type": "text", "text": context},
         {"type": "image", "path": img_path},
     ])
 

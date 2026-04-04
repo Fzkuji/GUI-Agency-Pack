@@ -28,8 +28,21 @@ def _get_runtime():
 def learn(app_name: str, runtime=None) -> dict:
     """Learn the UI of an app by labeling its components.
 
-    Returns dict: app_name, page_name, components_found,
-    components_saved, component_names, already_known
+    You will receive detected UI components and OCR text from a screenshot.
+    For each interactive component:
+    1. Assign a descriptive snake_case name (e.g., search_bar, send_button)
+    2. Skip purely decorative or background elements
+    3. Identify the current page name
+
+    Return JSON:
+    {
+      "app_name": "...",
+      "page_name": "current_page_name",
+      "component_names": ["search_bar", "send_button", ...],
+      "components_found": <total count>,
+      "components_saved": 0,
+      "already_known": false
+    }
     """
     rt = runtime or _get_runtime()
 
@@ -51,29 +64,16 @@ def learn(app_name: str, runtime=None) -> dict:
         for el in ocr_results[:60]
     )
 
-    prompt = f"""Learning UI of "{app_name}".
+    context = f"""App: {app_name}
 
 Detected components:
 {det_lines or '(none)'}
 
 OCR text:
-{ocr_lines or '(none)'}
-
-Label each interactive component with snake_case names.
-Skip decorative elements. Identify the page name.
-
-Return JSON:
-{{
-  "app_name": "{app_name}",
-  "page_name": "current_page",
-  "component_names": ["search_bar", "send_button", ...],
-  "components_found": {len(elements)},
-  "components_saved": 0,
-  "already_known": false
-}}"""
+{ocr_lines or '(none)'}"""
 
     reply = rt.exec(content=[
-        {"type": "text", "text": prompt},
+        {"type": "text", "text": context},
         {"type": "image", "path": img_path},
     ])
 

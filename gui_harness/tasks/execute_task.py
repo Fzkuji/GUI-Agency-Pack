@@ -2,14 +2,10 @@
 execute_task — the main planning loop.
 
 Takes a natural language task and autonomously loops:
-  observe → plan → act → verify → repeat
+  observe → plan → act → repeat
 
-This is the single entry point. SKILL.md points here.
-
-Note: execute_task is NOT an @agentic_function because it orchestrates
-multiple sub-functions that each call exec() once. The agentic runtime
-enforces one exec() per @agentic_function, so the orchestrator must be
-a plain function.
+execute_task is a plain function (not @agentic_function) because it
+orchestrates multiple sub-functions that each call exec() once.
 """
 
 from __future__ import annotations
@@ -32,22 +28,42 @@ def _get_runtime():
 @agentic_function(summarize={"depth": 0, "siblings": 0})
 def plan_next_action(task: str, obs: dict, step: int, max_steps: int,
                      history: list, runtime=None) -> dict:
-    """Ask the LLM to decide the next action based on current observation.
+    """Decide the single next GUI action to take.
 
-    Returns dict with: action, target, text, reasoning
+    You are given:
+    - The overall task to accomplish
+    - The current screen observation (app, visible text, elements)
+    - Previous action history
+
+    Choose ONE action. Options:
+    - "click": click an element (specify target name/description)
+    - "type": type text into a field (specify target + text)
+    - "double_click": double-click an element
+    - "right_click": right-click an element
+    - "shortcut": keyboard shortcut (specify keys like "ctrl+c")
+    - "key_press": single key press (specify key like "return", "escape", "delete")
+    - "done": task is already completed, stop
+
+    Return JSON:
+    {
+      "action": "click" or "type" or "double_click" or "right_click" or "shortcut" or "key_press" or "done",
+      "target": "what to click/interact with",
+      "text": "text to type (only for type action)",
+      "reasoning": "why this action"
+    }
     """
     rt = runtime or _get_runtime()
 
     history_summary = ""
     if history:
         lines = []
-        for h in history[-5:]:  # Last 5 actions
+        for h in history[-5:]:
             status = "✅" if h.get("success") else "❌"
             target_str = str(h.get('target', ''))[:40]
             lines.append(f"  {h['step']}. {status} {h['action']} → {target_str}")
         history_summary = f"\nRecent actions:\n" + "\n".join(lines)
 
-    prompt = f"""Task: {task}
+    context = f"""Task: {task}
 
 Current screen state:
   App: {obs.get('app_name', 'unknown')}
@@ -57,20 +73,10 @@ Current screen state:
   Target visible: {obs.get('target_visible', False)}
   Target location: {obs.get('target_location')}
 
-Step {step}/{max_steps}.{history_summary}
-
-What is the single next action to take? Return JSON:
-{{
-  "action": "click" or "type" or "double_click" or "right_click" or "shortcut" or "key_press" or "done",
-  "target": "what to click/interact with",
-  "text": "text to type (only for type action)",
-  "reasoning": "why this action"
-}}
-
-Return "done" as action if the task is already completed."""
+Step {step}/{max_steps}.{history_summary}"""
 
     reply = rt.exec(content=[
-        {"type": "text", "text": prompt},
+        {"type": "text", "text": context},
     ])
 
     try:
@@ -82,11 +88,8 @@ Return "done" as action if the task is already completed."""
 def execute_task(task: str, runtime=None, max_steps: int = 15) -> dict:
     """Execute a GUI task autonomously.
 
-    Runs an observe → plan → act → verify loop until the task is complete
+    Runs an observe → plan → act loop until the task is complete
     or max_steps is reached.
-
-    This is a plain function (not @agentic_function) because it orchestrates
-    multiple sub-functions that each use exec() once.
 
     Args:
         task:       Natural language description of what to do.
@@ -94,12 +97,7 @@ def execute_task(task: str, runtime=None, max_steps: int = 15) -> dict:
         max_steps:  Maximum number of actions (default: 15).
 
     Returns:
-        dict with keys:
-            task (str)
-            success (bool)
-            steps_taken (int)
-            final_state (str)
-            history (list[dict])  — each step's action + result
+        dict: task, success, steps_taken, final_state, history
     """
     from gui_harness.functions.observe import observe
     from gui_harness.functions.act import act
@@ -110,13 +108,13 @@ def execute_task(task: str, runtime=None, max_steps: int = 15) -> dict:
     completed = False
 
     for step in range(max_steps):
-        # 1. OBSERVE — what's on screen now?
+        # 1. OBSERVE
         obs = observe(
-            task=f"Step {step + 1}/{max_steps}. Task: {task}. What is the current state? What should I do next?",
+            task=f"Step {step + 1}/{max_steps}. Task: {task}. What is the current state?",
             runtime=rt,
         )
 
-        # 2. PLAN — ask LLM what action to take (separate @agentic_function)
+        # 2. PLAN
         plan = plan_next_action(
             task=task, obs=obs, step=step + 1, max_steps=max_steps,
             history=history, runtime=rt,
@@ -124,13 +122,13 @@ def execute_task(task: str, runtime=None, max_steps: int = 15) -> dict:
 
         action = plan.get("action", "done")
 
-        # 3. CHECK — is the task done?
+        # 3. DONE?
         if action == "done":
             completed = True
             history.append({"step": step + 1, "action": "done", "reasoning": plan.get("reasoning", "")})
             break
 
-        # 4. ACT — execute the planned action
+        # 4. ACT
         if action == "key_press":
             from gui_harness.primitives import input as _input
             _input.key_press(plan.get("target", "return"))
@@ -158,7 +156,7 @@ def execute_task(task: str, runtime=None, max_steps: int = 15) -> dict:
             "screen_changed": act_result.get("screen_changed", False),
         })
 
-    # Final verification
+    # Final observation
     final_obs = observe(task=f"Task was: {task}. Is it completed?", runtime=rt)
 
     return {

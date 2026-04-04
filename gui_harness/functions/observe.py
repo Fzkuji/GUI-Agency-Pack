@@ -2,7 +2,6 @@
 observe — screenshot + OCR + detection + LLM analysis.
 
 Session mode: summarize={"depth": 0, "siblings": 0}
-The OpenClaw agent accumulates context, so we only send this call's data.
 """
 
 from __future__ import annotations
@@ -26,14 +25,31 @@ def _get_runtime():
 
 @agentic_function(summarize={"depth": 0, "siblings": 0})
 def observe(task: str, app_name: str = None, runtime=None) -> dict:
-    """Observe the current screen state.
+    """Observe the current screen state. Analyze the screenshot and detection data.
 
-    1. Takes a screenshot
-    2. Runs OCR + UI detection
-    3. Sends data + screenshot to LLM for analysis
+    You will receive:
+    - A screenshot of the current screen
+    - OCR text detection results with click-space coordinates
+    - UI element detection results with click-space coordinates
 
-    Returns dict: app_name, page_description, visible_text,
-    interactive_elements, target_visible, target_location, screenshot_path
+    Your job:
+    - Describe what page/state the app is in
+    - List visible text and interactive elements
+    - Determine if the target (from the task) is visible
+    - If visible, report its exact coordinates from the detection data
+
+    IMPORTANT: coordinates MUST come from the OCR/detector lists, never estimated.
+
+    Return JSON:
+    {
+      "app_name": "...",
+      "page_description": "short description of current page/state",
+      "visible_text": ["key", "text", "labels"],
+      "interactive_elements": ["clickable", "element", "names"],
+      "target_visible": true/false,
+      "target_location": {"x": 0, "y": 0, "label": "..."} or null,
+      "screenshot_path": "..."
+    }
     """
     rt = runtime or _get_runtime()
 
@@ -59,30 +75,17 @@ def observe(task: str, app_name: str = None, runtime=None) -> dict:
         for el in elements[:50]
     )
 
-    prompt = f"""Task: {task}
+    context = f"""Task: {task}
 App: {app_name}
 
 OCR text (click-space coordinates):
 {ocr_lines or '(none)'}
 
 Detected UI elements (click-space coordinates):
-{det_lines or '(none)'}
-
-Return JSON:
-{{
-  "app_name": "{app_name}",
-  "page_description": "...",
-  "visible_text": ["..."],
-  "interactive_elements": ["..."],
-  "target_visible": true/false,
-  "target_location": {{"x": 0, "y": 0, "label": "..."}} or null,
-  "screenshot_path": "{img_path}"
-}}
-
-Coordinates MUST come from the OCR/detector lists above."""
+{det_lines or '(none)'}"""
 
     reply = rt.exec(content=[
-        {"type": "text", "text": prompt},
+        {"type": "text", "text": context},
         {"type": "image", "path": img_path},
     ])
 
