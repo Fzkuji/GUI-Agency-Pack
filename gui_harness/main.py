@@ -28,7 +28,7 @@ def main():
 
     # VM adapter
     if args.vm:
-        from gui_harness.primitives.vm_adapter import patch_for_vm
+        from gui_harness.adapters.vm_adapter import patch_for_vm
         patch_for_vm(args.vm)
         print(f"🖥️  VM mode: {args.vm}")
 
