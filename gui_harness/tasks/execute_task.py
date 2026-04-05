@@ -284,12 +284,26 @@ def execute_task(task: str, runtime=None, max_steps: int = 15, app_name: str = "
 
         if current_state is not None:
             transitions = get_available_transitions(app_name, current_state)
-            if transitions:
+
+            # Guard: if state hasn't changed for 2+ steps and last action was
+            # the same as what Tier 0 would pick, skip Tier 0 to avoid loops.
+            stuck_in_loop = (
+                len(history) >= 2
+                and history[-1].get("state_before") == current_state
+                and history[-1].get("state_after") == current_state
+                and history[-2].get("state_before") == current_state
+            )
+
+            if transitions and not stuck_in_loop:
                 if len(transitions) == 1:
-                    # Single known transition — check if relevant to task
-                    # For non-coord actions, execute directly (zero LLM)
+                    # Single known transition — direct replay only if:
+                    # - No coordinates needed
+                    # - Used enough times to trust
+                    # - State actually changed last time this transition was used
                     trans = transitions[0]
-                    if trans["action"] in NO_COORD_ACTIONS and trans["use_count"] >= 2:
+                    if (trans["action"] in NO_COORD_ACTIONS
+                            and trans["use_count"] >= 3
+                            and trans.get("to_state") != current_state):
                         action = trans["action"]
                         plan = {"action": action, "target": trans["target"],
                                 "reasoning": f"Tier 0: replay {trans['action']}:{trans['target']} (used {trans['use_count']}x)"}
