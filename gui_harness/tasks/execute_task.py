@@ -37,6 +37,9 @@ from gui_harness.planning.component_memory import (
 # GUI actions that need our visual detection pipeline for coordinates
 GUI_ACTIONS = {"click", "double_click", "right_click", "drag"}
 
+# Direct actions that execute immediately without detection
+DIRECT_ACTIONS = {"type", "press", "hotkey", "scroll"}
+
 _runtime = None
 
 
@@ -67,27 +70,33 @@ def decide_next_action(
 
     You are a GUI agent. Prioritize visual GUI interactions.
 
-    1. GUI actions (PREFERRED — we handle precise coordinate locating):
-      {"action": "click", "target": "description of element to click"}
-      {"action": "double_click", "target": "description of element to open"}
+    Actions that need coordinate locating (we find the target for you):
+      {"action": "click", "target": "description of element"}
+      {"action": "double_click", "target": "description of element"}
       {"action": "right_click", "target": "description of element"}
       {"action": "drag", "target": "start element", "target_end": "end element"}
 
-    2. General action (only when task does NOT require GUI interaction):
-      {"action": "general", "task": "description of what to do"}
-      Use this for: reading file contents, editing code, running commands,
-      or any task that is purely text/code-based with no visual UI needed.
+    Direct actions (execute immediately, no detection needed):
+      {"action": "type", "text": "text to type"}
+      {"action": "press", "key": "enter"}  (enter/escape/tab/delete/up/down/left/right/etc.)
+      {"action": "hotkey", "keys": "ctrl+s"}  (ctrl+c, ctrl+v, ctrl+z, ctrl+a, alt+f4, etc.)
+      {"action": "scroll", "direction": "down"}  (up/down)
 
-    3. Done:
+    General action (only when task does NOT need GUI interaction):
+      {"action": "general", "task": "description of what to do"}
+      Use for: reading file contents, editing code, running commands.
+
+    Done:
       {"action": "done", "reasoning": "task is complete"}
 
     Decision guide:
-    - Need to interact with a visible UI element? → GUI action
-    - Need to open a file on desktop? → double_click
-    - Need to navigate menus? → click
-    - Need to read/edit file contents without GUI? → general
-    - Need to fix code? → general
-    - Be efficient — minimize the number of steps
+    - Interact with visible UI element → click / double_click
+    - Open file on desktop → double_click
+    - Type text into focused field → type
+    - Save file → hotkey ctrl+s
+    - Navigate with keyboard → press / hotkey
+    - Read/edit code without GUI → general
+    - Be efficient — minimize steps
 
     Return ONLY valid JSON.
     """
@@ -136,6 +145,35 @@ Return ONLY valid JSON."""
         if '"done"' in reply_lower or "task is complete" in reply_lower:
             return {"action": "done", "reasoning": f"Parsed from text: {reply[:200]}"}
         return {"action": "retry", "reasoning": f"Could not parse: {reply[:200]}"}
+
+
+# ═══════════════════════════════════════════
+# Direct actions (no coordinate detection)
+# ═══════════════════════════════════════════
+
+def _execute_direct_action(action, plan):
+    """Execute a direct action that doesn't need coordinate detection."""
+    from gui_harness.action.keyboard import key_press, key_combo, type_text
+
+    if action == "type":
+        text = plan.get("text", "")
+        type_text(text)
+        return {"success": True}
+    elif action == "press":
+        key = plan.get("key", plan.get("target", "return"))
+        key_press(key)
+        return {"success": True}
+    elif action == "hotkey":
+        keys_str = plan.get("keys", plan.get("target", ""))
+        keys = [k.strip() for k in keys_str.split("+")]
+        key_combo(*keys)
+        return {"success": True}
+    elif action == "scroll":
+        direction = plan.get("direction", plan.get("target", "down")).lower()
+        key_press("pageup" if direction == "up" else "pagedown")
+        return {"success": True}
+    else:
+        return {"success": False, "error": f"Unknown direct action: {action}"}
 
 
 # ═══════════════════════════════════════════
@@ -350,14 +388,15 @@ def execute_task(task: str, runtime=None, max_steps: int = 30, app_name: str = "
             if action in GUI_ACTIONS:
                 result = _execute_gui_action(
                     action, plan, task, img_path, app_name, rt)
+            elif action in DIRECT_ACTIONS:
+                result = _execute_direct_action(action, plan)
             elif action == "general":
-                # Agent executes freely — can use any tools
                 sub_task = plan.get("task", plan.get("target", ""))
                 result = general_action(sub_task=sub_task, runtime=rt)
             elif action == "execute":
                 result = _execute_code(plan.get("code", ""))
             else:
-                # Unknown action — treat as free action
+                # Unknown action — treat as general action
                 sub_task = plan.get("task", plan.get("target", plan.get("code", "")))
                 result = general_action(sub_task=sub_task, runtime=rt)
         except Exception as e:
