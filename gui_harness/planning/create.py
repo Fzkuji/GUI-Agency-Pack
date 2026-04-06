@@ -27,19 +27,19 @@ _GUI_CONTEXT = """
 Available GUI primitives (already imported, use directly):
 
     # Screenshot
-    from gui_harness.primitives import screenshot
+    from gui_harness.perception import screenshot
     img_path = screenshot.take()                    # returns file path
 
     # OCR (text detection)
-    from gui_harness.primitives import ocr
+    from gui_harness.perception import ocr
     texts = ocr.detect_text(img_path)               # returns [{label, cx, cy, x, y, w, h}, ...]
 
     # UI element detection (YOLO-based)
-    from gui_harness.primitives import detector
+    from gui_harness.perception import detector
     icons, texts, merged, w, h = detector.detect_all(img_path)  # merged has all elements
 
     # Mouse & keyboard
-    from gui_harness.primitives import input as gui_input
+    from gui_harness.action import input as gui_input
     gui_input.mouse_click(x, y)                     # click at coordinates
     gui_input.mouse_double_click(x, y)
     gui_input.mouse_right_click(x, y)
@@ -51,7 +51,7 @@ Available GUI primitives (already imported, use directly):
     gui_input.get_frontmost_app()                    # returns app name
 
     # Template matching
-    from gui_harness.primitives import template_match
+    from gui_harness.perception import template_match
     result = template_match.find_template("AppName", "button_name")  # {found, x, y, confidence}
 
     # Existing agentic functions (can call these too)

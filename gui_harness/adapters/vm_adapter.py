@@ -1,11 +1,11 @@
 """
-gui_harness.primitives.vm_adapter — VM-based backend for GUI primitives.
+gui_harness.adapters.vm_adapter — VM-based backend for GUI primitives.
 
 Monkey-patches the primitives to work with a remote VM via HTTP API
 instead of local macOS operations.
 
 Usage:
-    from gui_harness.primitives.vm_adapter import patch_for_vm
+    from gui_harness.adapters.vm_adapter import patch_for_vm
     patch_for_vm("http://172.16.105.128:5000")
 """
 
