@@ -77,6 +77,10 @@ def plan_next_action(
     - If a previous action caused NO screen change, try a DIFFERENT approach
     - Use keyboard shortcuts when efficient (Ctrl+S, Ctrl+Z, etc.)
     - After typing in a cell, use key_press "return" to commit
+    - Use Ctrl+O to open files (faster than navigating file manager)
+    - Use Ctrl+A to select all, then type to replace (faster than positioning cursor)
+    - Minimize steps: prefer shortcuts over menu navigation
+    - When you need to type multi-line content, type it all at once
 
     Available actions:
 
@@ -275,10 +279,24 @@ def execute_task(task: str, runtime=None, max_steps: int = 15, app_name: str = "
         timing["screenshot"] = round(time.time() - t0, 2)
         time.sleep(0.3)
 
-        # Identify current state (for transition recording + hints)
-        t0 = time.time()
-        current_state, matched_components = identify_state(app_name, img_path)
-        timing["state_identify"] = round(time.time() - t0, 2)
+        # Identify current state — skip expensive template matching if the
+        # last action was a non-coord action that wouldn't change the state
+        # significantly (e.g., consecutive scrolls)
+        last_action = history[-1].get("action") if history else None
+        skip_state = (
+            last_action in ("scroll", "key_press")
+            and len(history) >= 2
+            and history[-1].get("state_before") == history[-1].get("state_after")
+        )
+
+        if skip_state:
+            current_state = history[-1].get("state_after")
+            matched_components = set()
+            timing["state_identify"] = 0
+        else:
+            t0 = time.time()
+            current_state, matched_components = identify_state(app_name, img_path)
+            timing["state_identify"] = round(time.time() - t0, 2)
 
         # Get transition hints (if any known transitions from this state)
         known_transitions = []
@@ -354,10 +372,18 @@ def execute_task(task: str, runtime=None, max_steps: int = 15, app_name: str = "
         time.sleep(0.5)
 
         # ── Record state transition ──
-        t0 = time.time()
-        after_img = _screenshot.take("/tmp/gui_agent_after.png")
-        new_state, _ = identify_state(app_name, after_img)
-        if result.get("success", False):
+        # Skip expensive post-action state ID for non-coord actions that
+        # likely don't change the state (scroll, key_press)
+        new_state = current_state  # default: assume state unchanged
+        if action in COORD_ACTIONS or action in ("shortcut", "done"):
+            t0 = time.time()
+            after_img = _screenshot.take("/tmp/gui_agent_after.png")
+            new_state, _ = identify_state(app_name, after_img)
+            timing["state_record"] = round(time.time() - t0, 2)
+        else:
+            timing["state_record"] = 0
+
+        if result.get("success", False) and current_state is not None:
             record_transition(
                 app_name=app_name,
                 from_state=current_state,
@@ -366,7 +392,6 @@ def execute_task(task: str, runtime=None, max_steps: int = 15, app_name: str = "
                 to_state=new_state,
             )
         prev_state = new_state
-        timing["state_record"] = round(time.time() - t0, 2)
 
         timing["step_total"] = round(time.time() - step_start, 2)
 
