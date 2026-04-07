@@ -351,6 +351,16 @@ def execute_task(task: str, runtime=None, max_steps: int = 30, app_name: str = "
     if hasattr(rt, '_inner') and hasattr(rt._inner, 'reset'):
         rt._inner.reset()
 
+    try:
+        return _execute_task_loop(task, rt, max_steps, app_name)
+    finally:
+        # Always close runtime when task ends (success or error)
+        if hasattr(rt, '_inner') and hasattr(rt._inner, 'reset'):
+            rt._inner.reset()
+
+
+def _execute_task_loop(task, rt, max_steps, app_name):
+    """Internal task loop. Separated so execute_task can wrap with try-finally."""
     history = []
     completed = False
     system_context = _build_system_context(task, app_name)
