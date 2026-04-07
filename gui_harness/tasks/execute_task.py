@@ -347,9 +347,7 @@ def execute_task(task: str, runtime=None, max_steps: int = 30, app_name: str = "
     """
     rt = runtime or _get_runtime()
 
-    # Kill ALL lingering claude stream-json processes, then reset runtime
-    # This ensures a truly clean session with no leftover context
-    _kill_stale_processes()
+    # Reset runtime to ensure clean session for this task
     if hasattr(rt, '_inner') and hasattr(rt._inner, 'reset'):
         rt._inner.reset()
 
