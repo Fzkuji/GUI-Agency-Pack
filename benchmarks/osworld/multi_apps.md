@@ -11,7 +11,7 @@
 | ⏳ Pending eval | 28 |
 | ❌ Blocked | 21 |
 | 🔲 Not yet attempted | 18 |
-| **Verified score** | **31.232/36 ≈ 86.8%** |
+| **Verified score** | **54.824/68 ≈ 80.6%** |
 
 > Scores are ONLY from OSWorld official evaluator (`desktop_env/evaluators/`).
 
