@@ -355,6 +355,9 @@ def decide_next_action(
     - Do NOT generate or paraphrase content from your own knowledge — extract
       data from what you see on screen or from actual files.
 
+    After completing an action, think about whether the task is TRULY done —
+    does everything actually work? If not, keep going until it does.
+
     Choose one action from the available list and return the corresponding JSON.
     """
     rt = runtime or _get_runtime()

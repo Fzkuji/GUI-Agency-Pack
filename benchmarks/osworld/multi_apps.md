@@ -11,7 +11,7 @@
 | ⏳ Pending eval | 28 |
 | ❌ Blocked | 21 |
 | 🔲 Not yet attempted | 18 |
-| **Verified score** | **56.824/69 ≈ 82.4%** |
+| **Verified score** | **57.824/70 ≈ 82.6%** |
 
 > Scores are ONLY from OSWorld official evaluator (`desktop_env/evaluators/`).
 
@@ -98,7 +98,7 @@
 | 77 | `dd60633f` | Extract Python from colab | **1.0** (Opus) | ✅ 提取Karpathy GPT colab的Python代码和注释。2步。 |
 | 78 | `ce2b64a2` | Identify mountain photos | **1.0** (Opus) | ✅ 识别3张山照片(Kilimanjaro/Everest/华山)并重命名。7步。 |
 | 79 | `3f05f3b9` | MP3 metadata editing | **1.0** (Opus) | ✅ MP3元数据填充。2步。 |
-| 80 | `e1fc0df3` | Install LanguageTool extension | **0.0** (Opus) | ❌ 成功安装LanguageTool.oxt到LibreOffice，但没装OpenJDK(Java依赖)。Evaluator检查两项：oxt ✅ + openjdk ❌。 |
+| 80 | `e1fc0df3` | Install LanguageTool extension | **1.0** | 安装LanguageTool.oxt + OpenJDK，15步948秒 |
 | 81 | `f8369178` | Install Orchis GNOME theme | | |
 | 82 | `778efd0a` | Extract video audio for slides | | |
 | 83 | `47f7c0ce` | Extract video frame for slide bg | | |
