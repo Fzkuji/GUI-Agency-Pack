@@ -107,7 +107,7 @@
 | 86 | `48c46dc7` | Setup workspace | **1.0** | ✅ done验证机制：首次done被拦截补开Nautilus+Python docs tab，360秒 |
 | 87 | `42d25c08` | TXT to EPUB novel | **0.0** | ❌ txt2epub转换成功但保存路径不对：agent从正文提取标题命名为"Passing through the book.epub"，evaluator期望"Pass Through.epub"（文件夹名） |
 | 88 | `e8172110` | GIMP pixel art extraction | **1.0** | ✅ PRESERVE FORMAT指导+CLI session：去背景不crop，保持1280×1280，SSIM=0.967，3步 |
-| 89 | `42f4d1c7` | VS Code + GIMP scripting | **0.0** | ❌ 安装lisp扩展失败，15步696秒 |
+| 89 | `42f4d1c7` | VS Code + GIMP scripting | **1.0** | ✅ GUI安装mattn.lisp扩展+Script-Fu resize脚本，11步。系统代理修复后联网成功 |
 | 90 | `3c8f201a` | Download + compress image | **1.0** | 下载+压缩图片到600KB以下，15步2067秒 |
 | 91 | `d68204bf` | Divide image into sections | | |
 | 92 | `91190194` | GIMP crop top 20% | | |

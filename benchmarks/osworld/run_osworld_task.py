@@ -90,6 +90,23 @@ def setup_vm(vm_ip: str, task_config: dict):
             ' > /usr/local/bin/google-chrome && chmod +x /usr/local/bin/google-chrome\''
         )
         print("  Chromium proxy wrapper installed.")
+
+        # Set system-wide proxy so all apps (VS Code, pip, curl, apt, etc.)
+        # can access the internet through Surge proxy on the host.
+        proxy_script = (
+            f'export HTTP_PROXY={PROXY_URL}\\n'
+            f'export HTTPS_PROXY={PROXY_URL}\\n'
+            f'export http_proxy={PROXY_URL}\\n'
+            f'export https_proxy={PROXY_URL}'
+        )
+        _exec(
+            f'echo password | sudo -S bash -c \''
+            f'printf "{proxy_script}\\n" > /etc/profile.d/proxy.sh && '
+            f'chmod +x /etc/profile.d/proxy.sh\''
+        )
+        # Also append to user's .bashrc for interactive shells
+        _exec(f'grep -q HTTP_PROXY ~/.bashrc 2>/dev/null || printf "\\n{proxy_script}\\n" >> ~/.bashrc')
+        print(f"  System-wide proxy configured: {PROXY_URL}")
     except Exception as e:
         print(f"  Proxy setup warning: {e}")
 
