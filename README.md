@@ -77,13 +77,15 @@ Full results: [benchmarks/osworld/multi_apps.md](benchmarks/osworld/multi_apps.m
 
 ## Quick Start
 
-**1. Install**
+### Step 1: Install GUI Agent Harness
 
 ```bash
 pip install git+https://github.com/Fzkuji/GUI-Agent-Harness.git
 ```
 
-Or for development:
+All dependencies are installed automatically, including [Agentic Programming](https://github.com/Fzkuji/Agentic-Programming), ultralytics (GPA-GUI-Detector), OpenCV, Pillow, etc.
+
+For development (editable install):
 
 ```bash
 git clone https://github.com/Fzkuji/GUI-Agent-Harness.git
@@ -91,24 +93,61 @@ cd GUI-Agent-Harness
 pip install -e .
 ```
 
-All dependencies (including [Agentic Programming](https://github.com/Fzkuji/Agentic-Programming)) are installed automatically.
+### Step 2: Set up an LLM provider
 
-**2. Run**
+GUI Agent Harness needs an LLM to make decisions. Install at least one provider:
+
+**Option A: Claude Code CLI (recommended)**
 
 ```bash
-# Local desktop (macOS)
+npm install -g @anthropic-ai/claude-code
+claude login
+```
+
+Uses your Claude subscription — no per-token cost. The agent runs as `claude -p` under the hood.
+
+**Option B: Anthropic API**
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Pay-per-token. Set the key in your shell profile for persistence.
+
+**Option C: OpenAI API**
+
+```bash
+export OPENAI_API_KEY=sk-...
+```
+
+The system auto-detects the best available provider. You can also force one with `--provider`.
+
+### Step 3: Platform setup
+
+**macOS:**
+- Grant accessibility permissions: System Settings → Privacy & Security → Accessibility → add your Terminal app
+- Apple Vision OCR works automatically (no extra install)
+
+**Linux:**
+- Install EasyOCR for text detection: `pip install easyocr`
+- Or install with: `pip install "gui-agent-harness[ocr] @ git+https://github.com/Fzkuji/GUI-Agent-Harness.git"`
+
+### Step 4: Run
+
+```bash
+# Local desktop
 gui-agent "Open Firefox and go to google.com"
 
-# Remote VM (OSWorld)
-gui-agent --vm http://VM_IP:5000 "Add a lecture to the timetable"
+# Remote VM (e.g., OSWorld)
+gui-agent --vm http://VM_IP:5000 "Install the Orchis GNOME theme"
 
 # Specify provider and model
 gui-agent --provider claude-code --model opus "Send hello in WeChat"
 ```
 
-**3. Use as LLM skill**
+### Use as LLM skill
 
-Add the `SKILL.md` to your LLM's skill/prompt configuration. The skill tells the LLM when and how to call `gui-agent`. See [SKILL.md](SKILL.md).
+GUI Agent Harness is designed to be called by an LLM as a tool. Add [SKILL.md](SKILL.md) to your LLM's skill/prompt configuration — it tells the LLM when and how to invoke `gui-agent`.
 
 ## CLI Options
 
