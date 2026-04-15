@@ -80,11 +80,18 @@ Full results: [benchmarks/osworld/multi_apps.md](benchmarks/osworld/multi_apps.m
 **1. Install**
 
 ```bash
-git clone --recurse-submodules https://github.com/Fzkuji/GUI-Agent-Harness.git
+pip install git+https://github.com/Fzkuji/GUI-Agent-Harness.git
+```
+
+Or for development:
+
+```bash
+git clone https://github.com/Fzkuji/GUI-Agent-Harness.git
 cd GUI-Agent-Harness
-pip install -e ./libs/agentic-programming
 pip install -e .
 ```
+
+All dependencies (including [Agentic Programming](https://github.com/Fzkuji/Agentic-Programming)) are installed automatically.
 
 **2. Run**
 

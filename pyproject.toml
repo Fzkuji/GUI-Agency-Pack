@@ -4,25 +4,29 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gui-agent-harness"
-version = "0.3.0"
-description = "GUI automation powered by Agentic Programming — designed for OpenClaw"
+version = "0.4.0"
+description = "Autonomous GUI agent — give it a task, it operates the desktop"
 requires-python = ">=3.11"
 dependencies = [
-    "agentic-programming @ file:libs/agentic-programming",
+    "agentic-programming @ git+https://github.com/Fzkuji/Agentic-Programming.git",
     "pynput",
     "opencv-python",
+    "numpy",
+    "Pillow",
+    "ultralytics",
+    "requests",
 ]
 
 [project.optional-dependencies]
+ocr = ["easyocr"]
 anthropic = ["anthropic>=0.30"]
 openai = ["openai>=1.30"]
 dev = [
     "pytest>=8.0",
-    "numpy",
 ]
+
+[project.scripts]
+gui-agent = "gui_harness.main:main"
 
 [tool.setuptools.packages.find]
 include = ["gui_harness*"]
-
-# Note: install agentic-programming submodule first:
-#   pip install -e ./libs/agentic-programming
