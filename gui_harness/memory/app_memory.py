@@ -77,22 +77,70 @@ def load_meta(app_dir):
 
 def save_meta(app_dir, meta):
     """Save meta.json to app/site directory."""
-    meta_path = Path(app_dir) / "meta.json"
-    with open(meta_path, "w") as f:
-        json.dump(meta, f, indent=2, ensure_ascii=False)
+    _atomic_write_json(Path(app_dir) / "meta.json", meta)
 
 
 def _safe_load_json(path, label="file"):
-    """Load a JSON file with corruption recovery. Returns dict on failure."""
-    if not path.exists():
-        return {}
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except (json.JSONDecodeError, ValueError) as e:
-        print(f"  [memory] {label} corrupt ({e}), rebuilding: {path}", file=sys.stderr)
+    """Load a JSON file with corruption recovery.
+
+    If the file is corrupt, tries to recover from .bak backup.
+    If backup also fails, deletes both and returns empty dict.
+    """
+    path = Path(path)
+    bak_path = path.with_suffix(path.suffix + ".bak")
+
+    # Try primary file
+    if path.exists():
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"  [memory] {label} corrupt ({e}), trying backup...", file=sys.stderr)
+
+    # Try backup
+    if bak_path.exists():
+        try:
+            with open(bak_path) as f:
+                data = json.load(f)
+            # Backup is good — restore it
+            _atomic_write_json(path, data)
+            print(f"  [memory] {label} restored from backup", file=sys.stderr)
+            return data
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Both corrupt or missing — clean up and start fresh
+    if path.exists():
         path.unlink(missing_ok=True)
-        return {}
+        print(f"  [memory] {label} unrecoverable, starting fresh: {path}", file=sys.stderr)
+    if bak_path.exists():
+        bak_path.unlink(missing_ok=True)
+    return {}
+
+
+def _atomic_write_json(path, data):
+    """Write JSON atomically: write to temp file, then rename.
+
+    This prevents corruption from interrupted writes (e.g., Ctrl+C,
+    process kill, disk full). The rename is atomic on POSIX systems.
+    """
+    path = Path(path)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    bak_path = path.with_suffix(path.suffix + ".bak")
+
+    # Write to temp file first
+    with open(tmp_path, "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+
+    # Rotate: current → backup, temp → current
+    if path.exists():
+        try:
+            path.rename(bak_path)
+        except OSError:
+            pass  # backup failed, not critical
+    tmp_path.rename(path)
 
 
 def load_components(app_dir):
@@ -102,9 +150,7 @@ def load_components(app_dir):
 
 def save_components(app_dir, components):
     """Save components.json to app/site directory."""
-    comp_path = Path(app_dir) / "components.json"
-    with open(comp_path, "w") as f:
-        json.dump(components, f, indent=2, ensure_ascii=False)
+    _atomic_write_json(Path(app_dir) / "components.json", components)
 
 
 def load_states(app_dir):
@@ -114,9 +160,7 @@ def load_states(app_dir):
 
 def save_states(app_dir, states):
     """Save states.json to app/site directory."""
-    states_path = Path(app_dir) / "states.json"
-    with open(states_path, "w") as f:
-        json.dump(states, f, indent=2, ensure_ascii=False)
+    _atomic_write_json(Path(app_dir) / "states.json", states)
 
 
 def load_transitions(app_dir):
@@ -126,9 +170,7 @@ def load_transitions(app_dir):
 
 def save_transitions(app_dir, transitions):
     """Save transitions.json to app/site directory."""
-    trans_path = Path(app_dir) / "transitions.json"
-    with open(trans_path, "w") as f:
-        json.dump(transitions, f, indent=2, ensure_ascii=False)
+    _atomic_write_json(Path(app_dir) / "transitions.json", transitions)
 
 
 def migrate_profile_if_needed(app_dir):
