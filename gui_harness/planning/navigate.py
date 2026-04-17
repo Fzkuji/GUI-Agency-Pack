@@ -13,7 +13,7 @@ from __future__ import annotations
 import sys
 from collections import deque
 
-from agentic import agentic_function
+from openprogram import agentic_function
 
 from gui_harness.memory import app_memory
 from gui_harness.planning.component_memory import match_memory_components

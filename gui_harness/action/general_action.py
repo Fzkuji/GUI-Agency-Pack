@@ -12,7 +12,7 @@ Write, etc.) and reports the result when done.
 
 from __future__ import annotations
 
-from agentic import agentic_function
+from openprogram import agentic_function
 
 
 @agentic_function(summarize={"depth": 0, "siblings": 0})

@@ -19,7 +19,7 @@ Usage:
 
 from __future__ import annotations
 
-from agentic.meta_functions import create, fix
+from openprogram.programs.functions.meta import create, fix
 
 # GUI-specific context injected into the create() prompt
 _GUI_CONTEXT = """

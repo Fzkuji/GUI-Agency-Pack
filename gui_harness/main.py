@@ -16,7 +16,7 @@ import time
 # Ensure project root is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from agentic import agentic_function
+from openprogram import agentic_function
 
 
 # ═══════════════════════════════════════════

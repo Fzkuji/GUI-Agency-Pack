@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from gui_harness.utils import parse_json
 
-from agentic import agentic_function
+from openprogram import agentic_function
 from gui_harness.perception import screenshot, ocr
 
 

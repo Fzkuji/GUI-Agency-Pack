@@ -7,7 +7,7 @@ compress=True hides sub-steps from summarize().
 
 from __future__ import annotations
 
-from agentic import agentic_function
+from openprogram import agentic_function
 
 
 @agentic_function(compress=True)

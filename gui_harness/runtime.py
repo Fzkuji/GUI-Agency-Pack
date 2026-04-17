@@ -31,7 +31,7 @@ import os
 import shutil
 from typing import Optional
 
-from agentic.runtime import Runtime
+from openprogram.agentic_programming.runtime import Runtime
 
 GUI_SYSTEM_PROMPT = """\
 You are a GUI automation agent.
@@ -128,7 +128,7 @@ class GUIRuntime(Runtime):
         if detected_provider == "openclaw":
             self._inner = _OpenClawRuntime(model=use_model, system=use_system)
         elif detected_provider == "anthropic":
-            from agentic.providers.anthropic import AnthropicRuntime
+            from openprogram.providers.anthropic import AnthropicRuntime
             self._inner = AnthropicRuntime(
                 model=use_model,
                 system=use_system,
@@ -136,7 +136,7 @@ class GUIRuntime(Runtime):
                 **kwargs,
             )
         elif detected_provider == "openai":
-            from agentic.providers.openai import OpenAIRuntime
+            from openprogram.providers.openai import OpenAIRuntime
             self._inner = OpenAIRuntime(
                 model=use_model,
                 system=use_system,
@@ -144,7 +144,7 @@ class GUIRuntime(Runtime):
                 **kwargs,
             )
         elif detected_provider == "claude-code":
-            from agentic.providers.claude_code import ClaudeCodeRuntime
+            from openprogram.providers.claude_code import ClaudeCodeRuntime
             # Main runtime: execution with Bash only (no local Read/Write/Edit)
             self._inner = ClaudeCodeRuntime(
                 model=use_model,

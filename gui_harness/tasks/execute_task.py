@@ -23,7 +23,7 @@ import sys
 import time
 from typing import Optional
 
-from agentic import agentic_function
+from openprogram import agentic_function
 
 from gui_harness.utils import parse_json
 from gui_harness.perception import screenshot as _screenshot
@@ -37,7 +37,7 @@ from gui_harness.planning.component_memory import (
     record_transition,
     get_available_transitions,
 )
-from agentic.functions.build_catalog import build_catalog
+from openprogram.programs.functions.buildin.build_catalog import build_catalog
 
 
 # ═══════════════════════════════════════════

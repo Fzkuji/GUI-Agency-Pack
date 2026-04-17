@@ -27,7 +27,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from agentic import agentic_function
+from openprogram import agentic_function
 
 from gui_harness.perception import screenshot, ocr, detector
 from gui_harness.memory import app_memory

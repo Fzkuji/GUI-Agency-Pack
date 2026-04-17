@@ -6,7 +6,7 @@ Wraps app_memory operations with @agentic_function for Context tree integration.
 
 from __future__ import annotations
 
-from agentic import agentic_function
+from openprogram import agentic_function
 
 from gui_harness.memory import app_memory
 
