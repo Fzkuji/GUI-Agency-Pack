@@ -1,21 +1,21 @@
 # OSWorld VLC Domain - GPT-5.5 Run Errors
 
-> 17 tasks | **77.5%** (3.876/5 officially scored so far) | started 2026-05-18
+> 17 tasks | **64.8%** (4.876/8 officially scored so far) | started 2026-05-18
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
 | Total tasks | 17 |
-| Run so far | 6 |
-| Officially scored | 5 |
-| Pass (1.0) | 3 |
-| Numeric fail (0.0) | 1 |
+| Run so far | 9 |
+| Officially scored | 8 |
+| Pass (1.0) | 4 |
+| Numeric fail (0.0) | 3 |
 | Partial | 1 |
 | Eval hang / no score | 1 |
 | Eval error / N/A | 0 |
-| Not reached | 11 |
-| Score so far | 77.5% (3.876/5) |
+| Not reached | 8 |
+| Score so far | 64.8% (4.876/8) |
 
 **Test environment:** Ubuntu VM at `172.16.105.130`, 1920x1080, `openai-codex/gpt-5.5` via GUI Agent Harness
 
@@ -42,7 +42,10 @@
 | 4 | bba3381f | Start streaming Apple HLS URL in VLC | 1.0 PASS | 10 | 152s | Recovered from a model/session target lookup failure; evaluator saw VLC playing `master.m3u8` |
 | 5 | fba2c100 | Save current video scene as `interstellar.png` on Desktop | 0.876 PARTIAL | 15 | 162s | Output file existed and downloaded; evaluator gave partial image match score after snapshot/rename/drag flow |
 | 6 | efcf0d81 | Make current video frame the desktop background | no score / EVAL_HANG | 15 | 191s | Runner hit screenshot read cascade; evaluator hung after `Got wallpaper successfully` and was terminated after >7 min |
-| 7-17 | - | Not reached | - | - | - | Continue from task 7 |
+| 7 | 8d9fd4e2 | Enable fullscreen mode in VLC | 1.0 PASS | 3 | 32s | Recovered from first-step `Agent session failed`; evaluator verified fullscreen size |
+| 8 | aa4b5023 | Flip video right-way-up and save output | 0.0 FAIL | 8 | 141s | Runner printed SUCCESS, but evaluator could not find expected `/home/user/1984_Apple_Macintosh_Commercial.mp4` |
+| 9 | 386dbd0e | Change Play/Pause hotkey while reading PDF | 0.0 FAIL | 15 | 280s | Hotkey preference flow did not satisfy `vlcrc` evaluator; repeated verification model errors |
+| 10-17 | - | Not reached | - | - | - | Continue from task 10 |
 
 ## Error Details
 
@@ -54,24 +57,31 @@
 | 4 | `find_target_in_known()` returned `Agent session failed` once | First URL open attempt showed an error dialog, then retry succeeded | PASS; VLC status playing and URL filename matched | `task_4.log` |
 | 5 | Snapshot was created, renamed, and moved, but content did not fully match reference | Four early `verify_step()` model errors; exhausted 15 steps | Partial score 0.876; file saved as `cache/eval_fba2c100/interstellar.png` | `task_5.log` |
 | 6 | Evaluator hang after retrieving wallpaper | Screenshot read cascade on steps 9-15; conclusion got HTTP 400 invalid image | No official score printed; terminated hung evaluator/run | `task_6.log` |
+| 7 | `plan_next_action()` returned `Agent session failed` on step 1 | Recovered by clicking known fullscreen toggle | PASS; screen/window sizes matched fullscreen | `task_7.log` |
+| 8 | Expected output video was missing | Runner used a terminal/ffmpeg route and ended with runner SUCCESS | Missing `/home/user/1984_Apple_Macintosh_Commercial.mp4`; score 0.0 | `task_8.log` |
+| 9 | Hotkey change did not match evaluator expectation | HuggingFace SSL retries during setup; repeated `verify_step()` model errors on steps 9-13 | `vlcrc` downloaded and checked; score 0.0 | `task_9.log` |
 
 ## Error Categories
 
 | Category | Affected tasks | Evidence | Notes |
 |----------|----------------|----------|-------|
-| Opaque model/session failure | 1, 4, 5, 6 | `RuntimeError: Agent session failed` | Not always fatal; task 6 cascaded into unreadable screenshots. |
-| Output missing | 3 | Evaluator could not retrieve expected MP3 file | The runner never reached a completed conversion/export. |
+| Opaque model/session failure | 1, 4, 5, 6, 7, 9 | `RuntimeError: Agent session failed` | Not always fatal; task 6 cascaded into unreadable screenshots. |
+| Output missing | 3, 8 | Evaluator could not retrieve expected output file | Task 3 missed MP3 export; task 8 missed expected MP4 path. |
 | Partial content mismatch | 5 | Evaluator scored saved snapshot at 0.876 | File placement/name were correct, but image match was imperfect. |
 | Evaluator hang | 6 | Evaluator printed `Got wallpaper successfully` and then stopped producing output for >7 min | Terminated to avoid blocking the continuous run. |
 | Invalid image passed to model | 6 | OpenAI HTTP 400: image data is not a valid image | Appeared during conclusion after screenshot read failures. |
 | Screenshot/read cascade | 6 | `WARNING Image Read Error /tmp/gui_agent_screen.png`; `ValueError: need at least one array to stack` | Started after opening Pictures during wallpaper workflow. |
+| Runner success but evaluator fail | 8 | Runner prints SUCCESS while official evaluator returns 0.0 | Treat evaluator as source of truth. |
 | Profile/dropdown interaction failure | 3 | Repeated attempts to click the VLC Convert profile field | Likely needs stronger VLC-specific memory or direct profile-selection strategy. |
-| Missing proxy config warning | 1-6 | `evaluation_examples/settings/proxy/dataimpulse.json` not found | Non-blocking for current VLC tasks. |
+| Hotkey/preference mismatch | 9 | `vlcrc` evaluator returned score 0.0 after hotkey edit flow | The visible flow changed something, but not the exact expected setting. |
+| HuggingFace asset download instability | 9 | SSL EOF retries during setup | Setup recovered. |
+| Missing proxy config warning | 1-9 | `evaluation_examples/settings/proxy/dataimpulse.json` not found | Non-blocking for current VLC tasks. |
 
 ## Handoff Notes
 
-- Continue at VLC task 7 in `runs/vlc_all_20260518_0310`.
+- Continue at VLC task 10 in `runs/vlc_all_20260518_0310`.
 - Treat official evaluator score as benchmark truth. Task 3 conclusion sounded partially successful, but official score is 0.0 because the MP3 file was missing.
+- Task 8 also printed runner SUCCESS, but official score is 0.0 because the expected MP4 file was missing.
 - Task 5 is not a pass despite correct filename/location because the official score is 0.876.
 - Task 6 has no numeric score because the evaluator hung after retrieving wallpaper; keep it separate from numeric fail until rerun or evaluator diagnosis.
 - VLC task count in official `test_all.json` is 17; the older `benchmarks/osworld/vlc.md` says 15 and should not be used as the task count for this GPT-5.5 run.
