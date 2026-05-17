@@ -1,21 +1,21 @@
 # OSWorld VLC Domain - GPT-5.5 Run Errors
 
-> 17 tasks | **60.6%** (7.876/13 officially scored so far) | started 2026-05-18
+> 17 tasks | **56.3%** (7.876/14 officially scored so far) | started 2026-05-18
 
 ## Summary
 
 | Metric | Value |
 |--------|-------|
 | Total tasks | 17 |
-| Run so far | 14 |
-| Officially scored | 13 |
+| Run so far | 15 |
+| Officially scored | 14 |
 | Pass (1.0) | 7 |
-| Numeric fail (0.0) | 5 |
+| Numeric fail (0.0) | 6 |
 | Partial | 1 |
 | Eval hang / no score | 1 |
 | Eval error / N/A | 0 |
-| Not reached | 3 |
-| Score so far | 60.6% (7.876/13) |
+| Not reached | 2 |
+| Score so far | 56.3% (7.876/14) |
 
 **Test environment:** Ubuntu VM at `172.16.105.130`, 1920x1080, `openai-codex/gpt-5.5` via GUI Agent Harness
 
@@ -50,7 +50,8 @@
 | 12 | a5bbbcd5 | Enable Minimal Interface in window mode | 1.0 PASS | 11 | 120s | Recovered from early verifier errors; evaluator confirmed minimal-interface setting |
 | 13 | 5ac2891a | Stop VLC auto-closing at video end | 1.0 PASS | 8 | 76s | Enabled “Pause on the last frame of a video”; evaluator confirmed `vlcrc` |
 | 14 | f3977615 | Allow multiple VLC instances | 1.0 PASS | 5 | 72s | Disabled “use only one instance when started from file manager”; evaluator confirmed `vlcrc` |
-| 15-17 | - | Not reached | - | - | - | Continue from task 15 |
+| 15 | 215dfd39 | Disable cone icon in splash screen | 0.0 FAIL | 15 | 338s | Searched advanced settings and scrolled Qt options, but did not reach/set the expected splash cone option |
+| 16-17 | - | Not reached | - | - | - | Continue from task 16 |
 
 ## Error Details
 
@@ -70,6 +71,7 @@
 | 12 | Early `verify_step()` model errors | Recovered through Preferences and View > Minimal Interface flow | PASS; `vlcrc` downloaded and checked | `task_12.log` |
 | 13 | Early `verify_step()` model errors | Recovered by enabling “Pause on the last frame of a video” and saving | PASS; `vlcrc` downloaded and checked | `task_13.log` |
 | 14 | No blocking error observed | Standard Preferences flow | PASS; `vlcrc` downloaded and checked | `task_14.log` |
+| 15 | Did not find or set the expected splash cone option | Spent steps 10-15 scrolling in advanced Qt settings | `vlcrc` downloaded and checked; score 0.0 | `task_15.log` |
 
 ## Error Categories
 
@@ -83,13 +85,13 @@
 | Screenshot/read cascade | 6, 10 | `WARNING Image Read Error /tmp/gui_agent_screen.png`; `ValueError: need at least one array to stack` | Repeated after GUI navigation failures. |
 | Runner success but evaluator fail | 8, 11 | Runner prints SUCCESS while official evaluator returns 0.0 | Treat evaluator as source of truth. |
 | Profile/dropdown interaction failure | 3 | Repeated attempts to click the VLC Convert profile field | Likely needs stronger VLC-specific memory or direct profile-selection strategy. |
-| Preference mismatch | 9, 10, 11 | `vlcrc` evaluator returned score 0.0 after preference edit flows | The visible flow changed something or got stuck, but not the exact expected settings. |
+| Preference mismatch | 9, 10, 11, 15 | `vlcrc` evaluator returned score 0.0 after preference edit flows | The visible flow changed something or got stuck, but not the exact expected settings. |
 | HuggingFace asset download instability | 9 | SSL EOF retries during setup | Setup recovered. |
-| Missing proxy config warning | 1-14 | `evaluation_examples/settings/proxy/dataimpulse.json` not found | Non-blocking for current VLC tasks. |
+| Missing proxy config warning | 1-15 | `evaluation_examples/settings/proxy/dataimpulse.json` not found | Non-blocking for current VLC tasks. |
 
 ## Handoff Notes
 
-- Continue at VLC task 15 in `runs/vlc_all_20260518_0310`.
+- Continue at VLC task 16 in `runs/vlc_all_20260518_0310`.
 - Treat official evaluator score as benchmark truth. Task 3 conclusion sounded partially successful, but official score is 0.0 because the MP3 file was missing.
 - Task 8 also printed runner SUCCESS, but official score is 0.0 because the expected MP4 file was missing.
 - Task 11 printed runner SUCCESS, but official score is 0.0 because the expected `vlcrc` setting was not present.
