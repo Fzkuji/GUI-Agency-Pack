@@ -37,7 +37,45 @@ from gui_harness.planning.component_memory import (
     record_transition,
     get_available_transitions,
 )
-from openprogram.programs.functions.buildin.build_catalog import build_catalog
+def build_catalog(available: dict) -> str:
+    """Format an action registry into a catalog string for the planner prompt.
+
+    Shows only parameters with source="llm" — the args the planner must decide.
+    Context-filled and runtime params are hidden.
+    """
+    lines = []
+    for name, spec in available.items():
+        description = spec.get("description", "")
+        input_spec = spec.get("input", {})
+        llm_params = []
+        param_details = []
+        for param_name, param_info in input_spec.items():
+            if param_info.get("source") != "llm":
+                continue
+            type_obj = param_info.get("type", str)
+            type_name = getattr(type_obj, "__name__", None) or str(type_obj)
+            llm_params.append(f"{param_name}: {type_name}")
+            detail = f"    {param_name}"
+            if "description" in param_info:
+                detail += f": {param_info['description']}"
+            opts = param_info.get("options")
+            if opts:
+                detail += f" (options: {', '.join(f'\"{o}\"' for o in opts)})"
+            param_details.append(detail)
+        sig = f"{name}({', '.join(llm_params)})" if llm_params else f"{name}()"
+        lines.append(sig)
+        if description:
+            lines.append(f"    {description}")
+        lines.extend(param_details)
+        if llm_params:
+            example_args = ", ".join(
+                f'"{p.split(":")[0].strip()}": "..."' for p in llm_params
+            )
+            lines.append(f'    call: {{"call": "{name}", "args": {{{example_args}}}}}')
+        else:
+            lines.append(f'    call: {{"call": "{name}"}}')
+        lines.append("")
+    return "\n".join(lines)
 
 
 # ═══════════════════════════════════════════
@@ -102,6 +140,21 @@ def _action_scroll(direction: str) -> dict:
 
 def _action_done(reasoning: str = "") -> dict:
     return {"success": True, "done": True, "reasoning": reasoning}
+
+
+def _normalize_plan(plan: dict) -> dict:
+    """Accept accidental nested step-shaped JSON and extract the action plan."""
+    if not isinstance(plan, dict):
+        return {"call": "general", "args": {"sub_task": str(plan)[:200]}}
+    inner = plan.get("plan")
+    if (
+        isinstance(inner, dict)
+        and ("call" in inner or "action" in inner or inner.get("done") is True)
+        and "call" not in plan
+        and "action" not in plan
+    ):
+        return inner
+    return plan
 
 
 def _build_action_registry(allow_general: bool = True):
@@ -464,6 +517,7 @@ def plan_next_action(
 
 def _dispatch(plan: dict, img_path: str, app_name: str, task: str, runtime, allow_general: bool = True) -> dict:
     """Execute the planned action. Pure Python dispatch (no LLM except via locate_target)."""
+    plan = _normalize_plan(plan)
     action_name = plan.get("call", plan.get("action", "general"))
     registry = _build_action_registry(allow_general=allow_general)
 
@@ -609,6 +663,7 @@ def gui_step(
         runtime=runtime,
     )
 
+    plan = _normalize_plan(plan)
     action_name = plan.get("call", plan.get("action", "general"))
 
     # Plan says done?
