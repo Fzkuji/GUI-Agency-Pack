@@ -157,7 +157,7 @@ def _normalize_plan(plan: dict) -> dict:
     return plan
 
 
-def _build_action_registry(allow_general: bool = True):
+def _build_action_registry(allow_general: bool = False):
     """Build the action function registry for LLM dispatch.
 
     When allow_general=False, the "general" (command-line) action is omitted,
@@ -443,6 +443,7 @@ def plan_next_action(
     transitions_info: str,
     action_catalog: str,
     runtime=None,
+    allow_general: bool = False,
 ) -> dict:
     """Decide the next action to take toward completing the task."""
     if runtime is None:
@@ -481,20 +482,48 @@ def plan_next_action(
         '"Continue the task").'
     )
 
-    context = "\n".join(parts)
-
-    reply = runtime.exec(content=[
-        {"type": "text", "text": context},
+    base_content = [
+        {"type": "text", "text": "\n".join(parts)},
         {"type": "image", "path": img_path},
-    ])
+    ]
+    valid = set(_build_action_registry(allow_general=allow_general))
 
-    try:
-        return _normalize_plan(parse_json(reply))
-    except Exception:
-        reply_lower = reply.lower()
-        if '"done"' in reply_lower or "task is complete" in reply_lower:
-            return {"action": "done", "goal": "task complete", "reasoning": reply[:200]}
-        return {"action": "general", "sub_task": reply[:200], "goal": reply[:100]}
+    def _parse(r: str):
+        try:
+            return _normalize_plan(parse_json(r))
+        except Exception:
+            rl = (r or "").lower()
+            if '"done"' in rl or "task is complete" in rl:
+                return {"call": "done", "goal": "task complete", "reasoning": (r or "")[:200]}
+            return None
+
+    reply = runtime.exec(content=base_content)
+    plan = _parse(reply)
+    call = (plan or {}).get("call") or (plan or {}).get("action")
+
+    # The planner picked an action that is not in the registry — a
+    # mode-forbidden action (e.g. "general" in GUI-only) or a
+    # hallucinated name. Re-prompt ONCE, keeping the screenshot, instead
+    # of letting _dispatch hard-fail the step.
+    if plan is None or call not in valid:
+        bad = call or "(unparseable reply)"
+        retry_msg = (
+            f'"{bad}" is not an available action. You MUST pick exactly '
+            f"one action from this list: {sorted(valid)}. "
+            "Reply again with the same JSON format."
+        )
+        reply = runtime.exec(
+            content=base_content + [{"type": "text", "text": retry_msg}]
+        )
+        plan = _parse(reply)
+        call = (plan or {}).get("call") or (plan or {}).get("action")
+
+    if plan is None or call not in valid:
+        # Retry exhausted — end the loop cleanly rather than dispatching
+        # an unknown action.
+        return {"call": "done", "goal": "planner did not pick a valid action",
+                "reasoning": str(reply)[:200]}
+    return plan
 
 
 def _normalize_plan(parsed: dict) -> dict:
@@ -518,7 +547,7 @@ def _normalize_plan(parsed: dict) -> dict:
 # 4. Dispatch — pure Python, execute planned action
 # ═══════════════════════════════════════════
 
-def _dispatch(plan: dict, img_path: str, app_name: str, task: str, runtime, allow_general: bool = True) -> dict:
+def _dispatch(plan: dict, img_path: str, app_name: str, task: str, runtime, allow_general: bool = False) -> dict:
     """Execute the planned action. Pure Python dispatch (no LLM except via locate_target)."""
     plan = _normalize_plan(plan)
     action_name = plan.get("call", plan.get("action", "general"))
@@ -585,7 +614,7 @@ def gui_step(
     feedback: Optional[dict],
     app_name: str,
     runtime=None,
-    allow_general: bool = True,
+    allow_general: bool = False,
 ) -> dict:
     """Execute one step of a GUI task: observe -> verify -> plan -> action.
 
@@ -664,6 +693,7 @@ def gui_step(
         transitions_info=obs["transitions_info"],
         action_catalog=catalog,
         runtime=runtime,
+        allow_general=allow_general,
     )
 
     plan = _normalize_plan(plan)
@@ -783,7 +813,7 @@ def execute_task(
     max_steps: int = 30,
     app_name: str = "desktop",
     work_dir: Optional[str] = None,
-    allow_general: bool = True,
+    allow_general: bool = False,
 ) -> dict:
     """Execute a GUI task. Thin wrapper around gui_agent for backward compatibility.
 

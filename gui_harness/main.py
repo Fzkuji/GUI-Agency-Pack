@@ -52,7 +52,7 @@ def gui_agent(
     max_steps: int = 15,
     app_name: str = "desktop",
     runtime=None,
-    allow_general: bool = True,
+    allow_general: bool = False,
 ) -> dict:
     """Autonomous GUI agent. Execute a GUI task by looping observe -> verify -> plan -> action.
 
