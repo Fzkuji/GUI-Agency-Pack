@@ -15,18 +15,229 @@ Usage:
 """
 
 import argparse
+import datetime as _dt
 import glob
 import json
 import os
 import subprocess
 import sys
 import time
+import traceback
 import urllib.request
+from contextlib import contextmanager
 
 OSWORLD_DIR = os.path.expanduser("~/OSWorld")
 VM_PORT = 5000
 VMRUN = "/Applications/VMware Fusion.app/Contents/Public/vmrun"
 VMX = os.path.expanduser("~/OSWorld/vmware_vm_data/Ubuntu-arm/Ubuntu.vmx")
+VM_SNAPSHOT = "init_state"
+HOST_PROXY_URL = "http://172.16.82.1:6152"
+OSWORLD_CACHE_DIR = "cache"
+
+
+def _expand_config_path(path: str) -> str:
+    if not os.path.isabs(path):
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        path = os.path.join(repo_root, path)
+    return os.path.abspath(os.path.expanduser(path))
+
+
+def load_run_config(path: str | None) -> dict:
+    if not path:
+        return {}
+    resolved = _expand_config_path(path)
+    with open(resolved) as f:
+        config = json.load(f)
+    config["_path"] = resolved
+    return config
+
+
+def apply_run_config(args, config: dict) -> None:
+    global OSWORLD_DIR, VM_PORT, VMRUN, VMX, VM_SNAPSHOT, HOST_PROXY_URL, OSWORLD_CACHE_DIR
+    if not config:
+        return
+
+    paths = config.get("paths", {})
+    vm = config.get("vm", {})
+    run = config.get("run", {})
+
+    OSWORLD_DIR = os.path.expanduser(paths.get("osworld_dir", OSWORLD_DIR))
+    VMRUN = os.path.expanduser(vm.get("vmrun", VMRUN))
+    VMX = os.path.expanduser(vm.get("vmx", VMX))
+    VM_SNAPSHOT = vm.get("snapshot", VM_SNAPSHOT)
+    VM_PORT = int(vm.get("server_port", VM_PORT))
+    HOST_PROXY_URL = vm.get("host_proxy_url", HOST_PROXY_URL)
+    OSWORLD_CACHE_DIR = paths.get("osworld_cache_dir", OSWORLD_CACHE_DIR)
+    configure_osworld_environment()
+
+    for name in ("domain", "vm", "max_steps", "provider", "model", "eval_timeout", "ro_retries"):
+        if getattr(args, name) is None and name in run:
+            setattr(args, name, run[name])
+    if args.artifact_dir is None and run.get("artifact_root"):
+        stamp = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        args.artifact_dir = os.path.join(run["artifact_root"], f"{args.domain}_task_{args.task_num}_{stamp}")
+
+
+def fill_arg_defaults(args) -> None:
+    defaults = {
+        "domain": "multi_apps",
+        "vm": "172.16.82.132",
+        "max_steps": 15,
+        "provider": "openai-codex",
+        "model": "gpt-5.5",
+        "eval_timeout": 300,
+        "ro_retries": 1,
+    }
+    for name, value in defaults.items():
+        if getattr(args, name) is None:
+            setattr(args, name, value)
+    configure_osworld_environment()
+
+
+def configure_osworld_environment() -> None:
+    os.environ["PROXY_CONFIG_FILE"] = os.path.join(
+        os.path.expanduser(OSWORLD_DIR),
+        "evaluation_examples/settings/proxy/dataimpulse.json",
+    )
+
+
+@contextmanager
+def pushd(path: str):
+    old = os.getcwd()
+    os.chdir(os.path.expanduser(path))
+    try:
+        yield
+    finally:
+        os.chdir(old)
+
+
+def write_json(path: str, data: dict):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2, default=str)
+
+
+def vm_execute(vm_ip: str, command: str, timeout: int = 15) -> dict:
+    vm_url = f"http://{vm_ip}:{VM_PORT}"
+    response = urllib.request.urlopen(
+        urllib.request.Request(
+            f"{vm_url}/execute",
+            data=json.dumps({"command": command, "shell": True}).encode(),
+            headers={"Content-Type": "application/json"},
+        ),
+        timeout=timeout,
+    )
+    return json.loads(response.read())
+
+
+def vm_screenshot_ok(vm_ip: str, timeout: int = 10) -> bool:
+    vm_url = f"http://{vm_ip}:{VM_PORT}"
+    try:
+        response = urllib.request.urlopen(f"{vm_url}/screenshot", timeout=timeout)
+        head = response.read(8)
+        return head == b"\x89PNG\r\n\x1a\n"
+    except Exception:
+        return False
+
+
+def assert_vm_writable(vm_ip: str, artifact_dir=None, label: str = "preflight"):
+    """Fail fast when the guest has remounted root read-only.
+
+    The VM screenshot service writes to /home/user/server/screenshots. When ext4
+    remounts read-only, screenshot calls start returning HTTP 500 and the agent
+    later passes broken screenshots to the model. Catching it here lets the
+    runner recover by reverting the VM and retrying the task instead of logging
+    a misleading task failure.
+    """
+    commands = {
+        "root_mount": "findmnt -no TARGET,OPTIONS /",
+        "tmp_write": "printf ok > /tmp/gui_harness_rw_check && cat /tmp/gui_harness_rw_check",
+        "screenshot_dir_write": (
+            "mkdir -p /home/user/server/screenshots && "
+            "printf ok > /home/user/server/screenshots/.gui_harness_rw_check && "
+            "cat /home/user/server/screenshots/.gui_harness_rw_check"
+        ),
+    }
+    report = {"label": label, "checks": {}}
+    errors = []
+    for name, command in commands.items():
+        try:
+            result = vm_execute(vm_ip, command, timeout=15)
+            report["checks"][name] = result
+            output = (result.get("output") or "").strip()
+            error = (result.get("error") or "").strip()
+            returncode = result.get("returncode", 0)
+            if name == "root_mount" and " ro," in f" {output},":
+                errors.append(f"root filesystem is read-only: {output}")
+            elif returncode not in (None, 0) or error or (name.endswith("_write") and output != "ok"):
+                errors.append(f"{name} failed: rc={returncode} output={output!r} error={error!r}")
+        except Exception as e:
+            report["checks"][name] = {"error": str(e), "traceback": traceback.format_exc()}
+            errors.append(f"{name} raised {e.__class__.__name__}: {e}")
+
+    screenshot_ok = vm_screenshot_ok(vm_ip)
+    report["checks"]["screenshot_png"] = {"ok": screenshot_ok}
+    if not screenshot_ok:
+        errors.append("screenshot endpoint did not return a valid PNG")
+
+    if artifact_dir:
+        write_json(os.path.join(artifact_dir, f"vm_writable_{label}.json"), report)
+    if errors:
+        raise RuntimeError("VM_WRITABLE_CHECK_FAILED: " + "; ".join(errors))
+
+
+def looks_like_vm_read_only_failure(exc_or_text) -> bool:
+    text = str(exc_or_text)
+    needles = [
+        "Read-only file system",
+        "read-only filesystem",
+        "VM_WRITABLE_CHECK_FAILED",
+        "screenshot service hit read-only filesystem",
+    ]
+    return any(needle in text for needle in needles)
+
+
+def make_artifact_dir(args, task_id: str) -> str:
+    path = (
+        args.artifact_dir
+        or os.environ.get("OSWORLD_ARTIFACT_DIR")
+        or os.path.join(
+            "runs",
+            "osworld_debug",
+            f"{args.domain}_task_{args.task_num}_{task_id}_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        )
+    )
+    path = os.path.abspath(os.path.expanduser(path))
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def capture_vm_diagnostics(vm_ip: str, artifact_dir: str, label: str):
+    vm_url = f"http://{vm_ip}:{VM_PORT}"
+    report = {"label": label, "vm_url": vm_url, "commands": []}
+    for cmd in [
+        "date",
+        "pgrep -a gimp || true",
+        "wmctrl -l || true",
+        "ls -la /home/user/Desktop | sed -n '1,120p'",
+        "file /home/user/Desktop/* 2>/dev/null | sed -n '1,120p'",
+    ]:
+        item = {"command": cmd}
+        try:
+            response = urllib.request.urlopen(
+                urllib.request.Request(
+                    f"{vm_url}/execute",
+                    data=json.dumps({"command": cmd, "shell": True}).encode(),
+                    headers={"Content-Type": "application/json"},
+                ),
+                timeout=15,
+            )
+            item["response"] = json.loads(response.read())
+        except Exception as e:
+            item["error"] = str(e)
+            item["traceback"] = traceback.format_exc()
+        report["commands"].append(item)
+    write_json(os.path.join(artifact_dir, f"vm_diagnostics_{label}.json"), report)
 
 def get_task_config(task_num: int, domain: str = "multi_apps") -> dict:
     """Load task config from OSWorld evaluation_examples."""
@@ -47,10 +258,10 @@ def get_task_config(task_num: int, domain: str = "multi_apps") -> dict:
     return config
 
 
-def setup_vm(vm_ip: str, task_config: dict):
+def setup_vm(vm_ip: str, task_config: dict, artifact_dir=None):
     """Revert VM to snapshot and run official OSWorld setup."""
-    print(f"Reverting VM to init_state...")
-    subprocess.run([VMRUN, "revertToSnapshot", VMX, "init_state"],
+    print(f"Reverting VM to {VM_SNAPSHOT}...")
+    subprocess.run([VMRUN, "revertToSnapshot", VMX, VM_SNAPSHOT],
                    capture_output=True, timeout=120)
     # start may hang if VM is already running after revert; run in background
     subprocess.Popen([VMRUN, "start", VMX, "gui"],
@@ -67,21 +278,15 @@ def setup_vm(vm_ip: str, task_config: dict):
             break
         except Exception:
             time.sleep(3)
+    assert_vm_writable(vm_ip, artifact_dir, "after_boot")
 
     # VM only has snap chromium (no google-chrome). OSWorld's setup tries to
     # launch google-chrome which silently fails. Pre-launch chromium with proxy
     # and remote-debugging so Playwright can connect via socat on port 9222.
-    # Surge on macOS listens on *:6152; VM reaches macOS at 172.16.82.1
-    PROXY_URL = "http://172.16.82.1:6152"
-    print(f"Pre-launching Chromium with proxy {PROXY_URL}...")
+    # Surge on macOS listens on *:6152; VM reaches macOS at the configured host proxy address.
+    print(f"Pre-launching Chromium with proxy {HOST_PROXY_URL}...")
     try:
-        _exec = lambda cmd: urllib.request.urlopen(
-            urllib.request.Request(
-                f"{vm_url}/execute",
-                data=json.dumps({"command": cmd, "shell": True}).encode(),
-                headers={"Content-Type": "application/json"},
-            ), timeout=30
-        )
+        _exec = lambda cmd: vm_execute(vm_ip, cmd, timeout=30)
         # Create google-chrome wrapper pointing to snap chromium (needs sudo)
         # OSWorld's _launch_setup will add --proxy-server flag automatically
         # Include --remote-debugging-port=1337 so evaluator can connect via
@@ -93,13 +298,21 @@ def setup_vm(vm_ip: str, task_config: dict):
         )
         print("  Chromium proxy wrapper installed.")
 
+        # Suppress transient Ubuntu/VMware desktop notifications, e.g. virtual
+        # camera warnings, because they overlay the app and pollute screenshots.
+        _exec(
+            "DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus "
+            "gsettings set org.gnome.desktop.notifications show-banners false || true"
+        )
+        print("  Desktop notification banners disabled for benchmark run.")
+
         # Set system-wide proxy so all apps (VS Code, pip, curl, apt, etc.)
         # can access the internet through Surge proxy on the host.
         proxy_script = (
-            f'export HTTP_PROXY={PROXY_URL}\\n'
-            f'export HTTPS_PROXY={PROXY_URL}\\n'
-            f'export http_proxy={PROXY_URL}\\n'
-            f'export https_proxy={PROXY_URL}'
+            f'export HTTP_PROXY={HOST_PROXY_URL}\\n'
+            f'export HTTPS_PROXY={HOST_PROXY_URL}\\n'
+            f'export http_proxy={HOST_PROXY_URL}\\n'
+            f'export https_proxy={HOST_PROXY_URL}'
         )
         _exec(
             f'echo password | sudo -S bash -c \''
@@ -108,7 +321,7 @@ def setup_vm(vm_ip: str, task_config: dict):
         )
         # Also append to user's .bashrc for interactive shells
         _exec(f'grep -q HTTP_PROXY ~/.bashrc 2>/dev/null || printf "\\n{proxy_script}\\n" >> ~/.bashrc')
-        print(f"  System-wide proxy configured: {PROXY_URL}")
+        print(f"  System-wide proxy configured: {HOST_PROXY_URL}")
     except Exception as e:
         print(f"  Proxy setup warning: {e}")
 
@@ -122,25 +335,27 @@ def setup_vm(vm_ip: str, task_config: dict):
     # Use official OSWorld SetupController for all config steps
     sys.path.insert(0, OSWORLD_DIR)
     from desktop_env.controllers.setup import SetupController
-    setup_controller = SetupController(
-        vm_ip=vm_ip,
-        server_port=VM_PORT,
-        chromium_port=9222,
-        vlc_port=8080,
-        cache_dir="cache",
-        client_password="password",
-        screen_width=1920,
-        screen_height=1080,
-    )
+    with pushd(OSWORLD_DIR):
+        setup_controller = SetupController(
+            vm_ip=vm_ip,
+            server_port=VM_PORT,
+            chromium_port=9222,
+            vlc_port=8080,
+            cache_dir=OSWORLD_CACHE_DIR,
+            client_password="password",
+            screen_width=1920,
+            screen_height=1080,
+        )
 
-    config = task_config.get("config", [])
-    use_proxy = bool(task_config.get("proxy"))
-    if config:
-        print(f"Running {len(config)} setup steps...")
-        try:
-            setup_controller.setup(config, use_proxy=use_proxy)
-        except Exception as e:
-            print(f"  Setup warning: {e}")
+        config = task_config.get("config", [])
+        use_proxy = bool(task_config.get("proxy"))
+        if config:
+            print(f"Running {len(config)} setup steps...")
+            try:
+                setup_controller.setup(config, use_proxy=use_proxy)
+            except Exception as e:
+                print(f"  Setup warning: {e}")
+    assert_vm_writable(vm_ip, artifact_dir, "after_setup")
     print("VM setup complete.")
 
 
@@ -214,6 +429,16 @@ def run_task(
         if task_id.startswith(prefix):
             task_instruction += hint
             break
+    if task_config.get("evaluator", {}).get("func") == "infeasible":
+        task_instruction += (
+            "\n\nIMPORTANT — OSWorld infeasible-task scoring rule:\n"
+            "- This task is marked by OSWorld as an infeasible-style task. Try a reasonable inspection first, "
+            "but if the requested operation is not actually available in GIMP, depends on unavailable plugins/data, "
+            "or belongs to another app/domain, you MUST choose the fail action instead of done.\n"
+            "- The fail reasoning MUST explicitly include the word FAIL or INFEASIBLE and the concrete blocker. "
+            "Examples: missing Blue theme option, GIMP cannot trim MP4 video, PNG-to-SVG vectorization is not a "
+            "reliable GIMP operation, hidden audio translation is outside GIMP, or RAW/CMYK support is unavailable."
+        )
     pre_loaded = []
     for c in task_config.get("config", []):
         if c["type"] == "download":
@@ -251,6 +476,17 @@ def run_task(
             + "\nFor .xlsx templates: fill data into the EXISTING sheet with the EXISTING column headers. "
             "Keep the same sheet name. Do not add new sheets. Save back to the same path."
         )
+
+    task_instruction += (
+        "\n\nIMPORTANT — OSWorld benchmark handoff rule:\n"
+        "- Do not proactively save, export, overwrite, or rename files unless the task instruction "
+        "explicitly asks you to save/export to a named file or path.\n"
+        "- For visual editing tasks, after the requested edit is visible in the app, leave the app "
+        "in a clean main-workspace state with no Save/Save As/Export/Open/confirmation/options dialog open; "
+        "the official evaluator may perform the final export or file check itself.\n"
+        "- If you accidentally open a save/export dialog that was not explicitly required, cancel or close it "
+        "before marking the task complete."
+    )
 
     # GUI-only apps: the OSWorld evaluator inspects the live app state
     # (e.g. GIMP's loaded image, LibreOffice's open document), so changes
@@ -305,27 +541,112 @@ def print_result(result: dict, task_num: int, score: float = None):
 def main():
     parser = argparse.ArgumentParser(description="Run OSWorld task")
     parser.add_argument("task_num", type=int, help="Task number (1-indexed)")
-    parser.add_argument("--domain", default="multi_apps", help="OSWorld domain (e.g., chrome, gimp, os, libreoffice_calc, multi_apps)")
-    parser.add_argument("--vm", default="172.16.82.132", help="VM IP address")
-    parser.add_argument("--max-steps", type=int, default=15, help="Max steps")
-    parser.add_argument("--provider", default="openai-codex", help="OpenProgram provider")
-    parser.add_argument("--model", default="gpt-5.5", help="OpenProgram model")
+    parser.add_argument("--run-config", default=os.environ.get("OSWORLD_RUN_CONFIG"), help="Fixed run config JSON. Relative paths resolve from repo root.")
+    parser.add_argument("--domain", help="OSWorld domain (e.g., chrome, gimp, os, libreoffice_calc, multi_apps)")
+    parser.add_argument("--vm", help="VM IP address")
+    parser.add_argument("--max-steps", type=int, help="Max steps")
+    parser.add_argument("--provider", help="OpenProgram provider")
+    parser.add_argument("--model", help="OpenProgram model")
     parser.add_argument("--no-setup", action="store_true", help="Skip VM reset")
     parser.add_argument("--no-eval", action="store_true", help="Skip official evaluation")
+    parser.add_argument("--eval-timeout", type=int, help="Official evaluator timeout in seconds")
+    parser.add_argument(
+        "--ro-retries",
+        type=int,
+        help="Retry the whole task after VM read-only filesystem or screenshot-service failure.",
+    )
+    parser.add_argument(
+        "--artifact-dir",
+        help="Directory for structured debug artifacts. Defaults to runs/osworld_debug/<domain_task_timestamp>.",
+    )
     args = parser.parse_args()
+    run_config = load_run_config(args.run_config)
+    apply_run_config(args, run_config)
+    fill_arg_defaults(args)
 
     task_config = get_task_config(args.task_num, args.domain)
     task_id = task_config["id"][:8]
+    artifact_dir = make_artifact_dir(args, task_id)
+    os.environ["GUI_HARNESS_ARTIFACT_DIR"] = artifact_dir
+    print(f"[artifacts] {artifact_dir}")
+    write_json(
+        os.path.join(artifact_dir, "task_config.json"),
+        {
+            "task_num": args.task_num,
+            "domain": args.domain,
+            "task_id": task_config.get("id"),
+            "instruction": task_config.get("instruction"),
+            "related_apps": task_config.get("related_apps"),
+            "proxy": task_config.get("proxy"),
+            "args": vars(args),
+            "run_config": run_config,
+            "resolved_environment": {
+                "osworld_dir": OSWORLD_DIR,
+                "vm_port": VM_PORT,
+                "vmrun": VMRUN,
+                "vmx": VMX,
+                "snapshot": VM_SNAPSHOT,
+                "host_proxy_url": HOST_PROXY_URL,
+                "osworld_cache_dir": OSWORLD_CACHE_DIR,
+                "python_executable": sys.executable,
+            },
+        },
+    )
+    if run_config:
+        print(f"[run-config] {run_config['_path']}")
+    print(f"[python] {sys.executable}")
     print(f"Task {args.task_num} ({task_id}): {task_config['instruction'][:80]}...")
     print(f"Apps: {task_config.get('related_apps')} | Proxy: {task_config.get('proxy')}")
 
     if task_config.get("proxy"):
         print("WARNING: This task requires proxy/internet access.")
 
-    if not args.no_setup:
-        setup_vm(args.vm, task_config)
+    result = None
+    attempts = max(1, args.ro_retries + 1)
+    run_errors = []
+    for attempt in range(1, attempts + 1):
+        try:
+            if attempt > 1:
+                print(f"[recover] Retrying task after VM read-only failure (attempt {attempt}/{attempts})...")
+            if not args.no_setup:
+                setup_vm(args.vm, task_config, artifact_dir)
+            else:
+                assert_vm_writable(args.vm, artifact_dir, f"no_setup_pre_run_attempt{attempt}")
 
-    result = run_task(task_config, args.vm, args.max_steps, args.provider, args.model)
+            result = run_task(task_config, args.vm, args.max_steps, args.provider, args.model)
+            write_json(os.path.join(artifact_dir, "agent_result.json"), result)
+            assert_vm_writable(args.vm, artifact_dir, f"before_eval_attempt{attempt}")
+            break
+        except Exception as e:
+            run_error = {
+                "phase": "setup_or_run",
+                "attempt": attempt,
+                "max_attempts": attempts,
+                "error_type": e.__class__.__name__,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+                "vm_read_only_like": looks_like_vm_read_only_failure(e),
+            }
+            run_errors.append(run_error)
+            print(f"[error] attempt {attempt}/{attempts} {run_error['error_type']}: {run_error['error']}")
+            print(run_error["traceback"])
+            capture_vm_diagnostics(args.vm, artifact_dir, f"run_error_attempt{attempt}")
+            write_json(os.path.join(artifact_dir, "run_errors.json"), {"errors": run_errors})
+            if run_error["vm_read_only_like"] and attempt < attempts and not args.no_setup:
+                continue
+            write_json(
+                os.path.join(artifact_dir, "run_report.json"),
+                {
+                    "task_num": args.task_num,
+                    "domain": args.domain,
+                    "task_id": task_config.get("id"),
+                    "status": "error",
+                    "error": run_error,
+                    "errors": run_errors,
+                    "artifact_dir": artifact_dir,
+                },
+            )
+            raise
 
     # Diagnose Chrome debugging port before evaluation
     vm_url = f"http://{args.vm}:5000"
@@ -358,10 +679,60 @@ def main():
         here = os.path.dirname(os.path.abspath(__file__))
         eval_script = os.path.join(here, "eval_osworld_task.py")
         print("\n[eval] Running official evaluator...")
-        subprocess.run(
-            [sys.executable, eval_script, str(args.task_num), "--domain", args.domain, "--vm", args.vm],
-            capture_output=False,
+        eval_timed_out = False
+        try:
+            eval_result = subprocess.run(
+                [
+                    sys.executable,
+                    eval_script,
+                    str(args.task_num),
+                    "--domain",
+                    args.domain,
+                    "--vm",
+                    args.vm,
+                    "--agent-result",
+                    os.path.join(artifact_dir, "agent_result.json"),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=args.eval_timeout,
+            )
+        except subprocess.TimeoutExpired as e:
+            eval_timed_out = True
+            eval_result = subprocess.CompletedProcess(
+                e.cmd,
+                124,
+                stdout=e.stdout or "",
+                stderr=(e.stderr or "") + f"\nEvaluator timed out after {args.eval_timeout}s\n",
+            )
+        print(eval_result.stdout, end="")
+        print(eval_result.stderr, end="", file=sys.stderr)
+        write_json(
+            os.path.join(artifact_dir, "eval_result.json"),
+            {
+                "returncode": eval_result.returncode,
+                "stdout": eval_result.stdout,
+                "stderr": eval_result.stderr,
+                "timed_out": eval_timed_out,
+                "timeout_seconds": args.eval_timeout,
+            },
         )
+        if eval_result.returncode != 0:
+            capture_vm_diagnostics(args.vm, artifact_dir, "eval_error")
+
+    capture_vm_diagnostics(args.vm, artifact_dir, "final")
+    write_json(
+        os.path.join(artifact_dir, "run_report.json"),
+        {
+            "task_num": args.task_num,
+            "domain": args.domain,
+            "task_id": task_config.get("id"),
+            "status": "completed",
+            "result_success": result.get("success") if isinstance(result, dict) else None,
+            "steps_taken": result.get("steps_taken") if isinstance(result, dict) else None,
+            "artifact_dir": artifact_dir,
+        },
+    )
 
     print_result(result, args.task_num, score)
 
