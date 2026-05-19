@@ -195,7 +195,37 @@ def vm_screenshot_ok(vm_ip: str, timeout: int = 10) -> bool:
         return False
 
 
-def assert_vm_writable(vm_ip: str, artifact_dir=None, label: str = "preflight"):
+def force_vm_readwrite(vm_ip: str, artifact_dir=None, label: str = "force_rw") -> dict:
+    """Best-effort override for benchmark VMs that remount root read-only.
+
+    The OSWorld VMware image is disposable and restored from snapshot for every
+    task. For benchmark stability, prefer keeping the guest writable over
+    preserving ext4's default errors=remount-ro behavior.
+    """
+    command = r"""
+set -eu
+ROOT_SRC="$(findmnt -no SOURCE /)"
+echo password | sudo -S sh -c "
+  tune2fs -e continue '$ROOT_SRC' >/tmp/gui_harness_tune2fs.log 2>&1 || true
+  mount -o remount,rw,errors=continue / >/tmp/gui_harness_remount.log 2>&1 || +    mount -o remount,rw / >>/tmp/gui_harness_remount.log 2>&1 || true
+  mkdir -p /tmp /home/user/server/screenshots
+  chown user:user /home/user/server/screenshots 2>/dev/null || true
+  chmod 1777 /tmp 2>/dev/null || true
+  chmod 755 /home/user/server/screenshots 2>/dev/null || true
+"
+findmnt -no SOURCE,TARGET,FSTYPE,OPTIONS /
+printf ok > /tmp/gui_harness_force_rw_check && cat /tmp/gui_harness_force_rw_check
+"""
+    try:
+        result = vm_execute(vm_ip, command, timeout=30)
+    except Exception as e:
+        result = {"error": str(e), "traceback": traceback.format_exc(), "status": "exception"}
+    if artifact_dir:
+        write_json(os.path.join(artifact_dir, f"vm_force_rw_{label}.json"), result)
+    return result
+
+
+def assert_vm_writable(vm_ip: str, artifact_dir=None, label: str = "preflight", recover: bool = True):
     """Fail fast when the guest has remounted root read-only.
 
     The VM screenshot service writes to /home/user/server/screenshots. When ext4
@@ -238,6 +268,9 @@ def assert_vm_writable(vm_ip: str, artifact_dir=None, label: str = "preflight"):
     if artifact_dir:
         write_json(os.path.join(artifact_dir, f"vm_writable_{label}.json"), report)
     if errors:
+        if recover:
+            force_vm_readwrite(vm_ip, artifact_dir, label)
+            return assert_vm_writable(vm_ip, artifact_dir, f"{label}_after_force_rw", recover=False)
         raise RuntimeError("VM_WRITABLE_CHECK_FAILED: " + "; ".join(errors))
 
 
@@ -337,6 +370,7 @@ def setup_vm(vm_ip: str, task_config: dict, artifact_dir=None):
             break
         except Exception:
             time.sleep(3)
+    force_vm_readwrite(vm_ip, artifact_dir, "after_boot")
     assert_vm_writable(vm_ip, artifact_dir, "after_boot")
 
     # VM only has snap chromium (no google-chrome). OSWorld's setup tries to
@@ -414,6 +448,7 @@ def setup_vm(vm_ip: str, task_config: dict, artifact_dir=None):
                 setup_controller.setup(config, use_proxy=use_proxy)
             except Exception as e:
                 print(f"  Setup warning: {e}")
+    force_vm_readwrite(vm_ip, artifact_dir, "after_setup")
     assert_vm_writable(vm_ip, artifact_dir, "after_setup")
     print("VM setup complete.")
 
